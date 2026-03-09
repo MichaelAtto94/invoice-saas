@@ -13,6 +13,11 @@ model Tenant {
   currencyCode CurrencyCode @default(ZMW)
   createdAt    DateTime     @default(now())
 
+  address    String?
+  phone      String?
+  email      String?
+  logoUrl    String?
+
   receipts Receipt[]
 
   roles     Role[]

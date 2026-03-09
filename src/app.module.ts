@@ -19,6 +19,7 @@ import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.mod
 import { RecurringInvoicesModule } from './modules/recurring-invoices/recurring-invoices.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RemindersModule } from './modules/reminders/reminders.module';
+import { TenantModule } from './modules/tenant/tenant.module';
 
 
 
@@ -37,6 +38,7 @@ import { RemindersModule } from './modules/reminders/reminders.module';
     ExchangeRatesModule,
     RecurringInvoicesModule,
     RemindersModule,
+    TenantModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
