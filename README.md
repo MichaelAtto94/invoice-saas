@@ -21,6 +21,41 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
+
+
+  # Invoice SaaS
+
+Multi-tenant invoicing backend built with:
+
+- NestJS
+- Prisma
+- PostgreSQL
+- PDFKit
+- NodeMailer
+- JWT Authentication
+
+## Features
+
+- Multi-tenant SaaS architecture
+- Clients management
+- Quotes → Invoices
+- Receipts & payments
+- Dashboard analytics
+- Exchange rate FX support
+- Recurring invoices
+- Email payment reminders
+- Excel exports
+- PDF statements
+
+## Tech Stack
+
+- NestJS
+- Prisma ORM
+- PostgreSQL
+- TypeScript
+
+
+
 ## Description
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
