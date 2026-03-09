@@ -1,0 +1,344 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id           String       @id @default(uuid())
+  name         String
+  slug         String       @unique
+  currencyCode CurrencyCode @default(ZMW)
+  createdAt    DateTime     @default(now())
+
+  receipts Receipt[]
+
+  roles     Role[]
+  members   TenantUser[]
+  clients   Client[]
+  items     Item[]
+  sequences DocumentSequence?
+}
+
+model User {
+  id           String   @id @default(uuid())
+  fullName     String
+  email        String   @unique
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  memberships   TenantUser[]
+  refreshTokens RefreshToken[]
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id])
+  members TenantUser[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model TenantUser {
+  tenantId  String
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  @@id([tenantId, userId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  quotes            Quote[]
+  invoices          Invoice[]
+  recurringInvoices RecurringInvoice[]
+
+  @@index([tenantId])
+}
+
+model Item {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  unitPrice   Int      @default(0)
+  costPrice   Int      @default(0) // cents (your buying cost)
+  isService   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  quoteLines   QuoteLine[]
+  invoiceLines InvoiceLine[]
+
+  @@index([tenantId])
+}
+
+model RecurringInvoiceLine {
+  id String @id @default(uuid())
+
+  recurringInvoiceId String
+  itemId             String?
+
+  name        String
+  description String?
+
+  quantity  Int
+  unitPrice Int
+  costPrice Int
+  lineTotal Int
+
+  recurringInvoice RecurringInvoice @relation(fields: [recurringInvoiceId], references: [id])
+
+  @@index([recurringInvoiceId])
+}
+
+model DocumentSequence {
+  tenantId      String   @id
+  invoicePrefix String   @default("INV-")
+  quotePrefix   String   @default("Q-")
+  receiptPrefix String   @default("RCT-")
+  invoiceNext   Int      @default(1)
+  quoteNext     Int      @default(1)
+  receiptNext   Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tenantId  String
+  tokenHash String
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tenantId])
+}
+
+model Quote {
+  id       String @id @default(uuid())
+  tenantId String
+  number   String
+  clientId String
+
+  status    String    @default("DRAFT")
+  issueDate DateTime  @default(now())
+  dueDate   DateTime?
+  notes     String?
+
+  convertedToInvoiceId String?   @unique
+  convertedAt          DateTime?
+
+  subtotal Int @default(0)
+  taxTotal Int @default(0)
+  total    Int @default(0)
+
+  currency     CurrencyCode @default(ZMW)
+  fxRateToBase Int          @default(1000000) // 1,000,000 = 1.000000 (6dp)
+  baseTotal    Int          @default(0) // total converted to tenant base
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client  Client      @relation(fields: [clientId], references: [id])
+  lines   QuoteLine[]
+  invoice Invoice?
+
+  @@unique([tenantId, number])
+  @@index([tenantId, clientId])
+}
+
+model QuoteLine {
+  id       String  @id @default(uuid())
+  tenantId String
+  quoteId  String
+  itemId   String?
+
+  name        String
+  description String?
+  quantity    Int     @default(1)
+  unitPrice   Int     @default(0)
+  costPrice   Int     @default(0) // cents snapshot
+  lineTotal   Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  quote Quote @relation(fields: [quoteId], references: [id])
+  item  Item? @relation(fields: [itemId], references: [id])
+
+  @@index([tenantId, quoteId])
+}
+
+model Invoice {
+  id       String  @id @default(uuid())
+  tenantId String
+  number   String
+  clientId String
+  quoteId  String? @unique
+
+  status    String    @default("DRAFT") // DRAFT | SENT | PARTIAL | PAID | VOID
+  issueDate DateTime  @default(now())
+  dueDate   DateTime?
+  notes     String?
+
+  currency     CurrencyCode @default(ZMW)
+  fxRateToBase Int          @default(1000000) // 6dp fixed-point
+  baseTotal    Int          @default(0)
+
+  subtotal   Int @default(0)
+  taxTotal   Int @default(0)
+  total      Int @default(0)
+  amountPaid Int @default(0)
+
+  currencyCode CurrencyCode @default(ZMW)
+
+  // FX snapshot (only used when invoice currency != tenant currency)
+  // Stored as fixed-point int with 6 decimals.
+  // Example: 27.345600 => 27345600
+  fxRate Int?
+  fxFrom CurrencyCode?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receipts Receipt[]
+
+  client Client        @relation(fields: [clientId], references: [id])
+  quote  Quote?        @relation(fields: [quoteId], references: [id])
+  lines  InvoiceLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, clientId])
+}
+
+model InvoiceLine {
+  id        String  @id @default(uuid())
+  tenantId  String
+  invoiceId String
+  itemId    String?
+
+  name        String
+  description String?
+  quantity    Int     @default(1)
+  unitPrice   Int     @default(0)
+  costPrice   Int     @default(0) // cents snapshot
+  lineTotal   Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  item    Item?   @relation(fields: [itemId], references: [id])
+
+  @@index([tenantId, invoiceId])
+}
+
+model Receipt {
+  id        String @id @default(uuid())
+  tenantId  String
+  number    String
+  invoiceId String
+
+  amount    Int
+  method    String? // CASH | MOBILE_MONEY | BANK | CARD etc
+  reference String? // tx ref
+  notes     String?
+
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, number])
+  @@index([tenantId, invoiceId])
+}
+
+enum CurrencyCode {
+  ZMW
+  USD
+  ZAR
+  EUR
+  GBP
+}
+
+enum RecurringInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+model RecurringInvoice {
+  id       String @id @default(uuid())
+  tenantId String
+  clientId String
+
+  name         String
+  currencyCode String
+
+  interval      RecurringInterval
+  intervalCount Int               @default(1)
+
+  nextRunDate DateTime
+  lastRunDate DateTime?
+
+  issueDays Int @default(0)
+  dueDays   Int @default(7)
+
+  subtotal Int
+  taxTotal Int
+  total    Int
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  lines RecurringInvoiceLine[]
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+model ExchangeRate {
+  id       String       @id @default(uuid())
+  tenantId String
+  from     CurrencyCode
+  to       CurrencyCode
+  rate     Int // 6dp fixed-point (e.g. 27.345600 => 27345600)
+  asOfDate DateTime     @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
