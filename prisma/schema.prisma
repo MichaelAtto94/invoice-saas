@@ -209,7 +209,7 @@ model Invoice {
   number   String
   clientId String
   quoteId  String? @unique
-  publicId String @unique
+  publicId String? @unique
 
   status    String    @default("DRAFT") // DRAFT | SENT | PARTIAL | PAID | VOID
   issueDate DateTime  @default(now())
