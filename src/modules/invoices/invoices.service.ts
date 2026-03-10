@@ -119,13 +119,16 @@ export class InvoicesService {
   }
 
   // ✅ Build PDF
+  // ✅ Build PDF
   async buildInvoicePdf(
     id: string,
   ): Promise<{ filename: string; buffer: Buffer }> {
+    const tenantId = this.requireTenantId();
+
     if (!id) throw new BadRequestException('id is required');
 
     const inv = await this.prisma.invoice.findFirst({
-      where: { id },
+      where: { id, tenantId },
       include: {
         client: true,
         lines: true,
@@ -135,25 +138,34 @@ export class InvoicesService {
     if (!inv) throw new NotFoundException('Invoice not found');
 
     const tenant = await this.prisma.tenant.findFirst({
-      where: { id: inv.tenantId },
-      select: { name: true, slug: true },
+      where: { id: tenantId },
+      select: {
+        name: true,
+        slug: true,
+        address: true,
+        phone: true,
+        email: true,
+        logoUrl: true,
+      },
     });
 
     const buffer = await buildInvoicePdf({
+      company: {
+        name: tenant?.name ?? 'Company',
+        address: tenant?.address ?? null,
+        phone: tenant?.phone ?? null,
+        email: tenant?.email ?? null,
+        logoUrl: tenant?.logoUrl ?? null,
+      },
       invoiceNumber: inv.number,
       issueDate: inv.issueDate,
       dueDate: inv.dueDate,
       status: inv.status,
-
       currencyCode: inv.currencyCode,
-
-      tenantName: tenant?.name ?? 'Company',
-      tenantSlug: tenant?.slug ?? 'tenant',
-
       clientName: inv.client.name,
       clientEmail: inv.client.email,
       clientPhone: inv.client.phone,
-
+      clientAddress: inv.client.address,
       lines: inv.lines.map((l) => ({
         name: l.name,
         description: l.description,
@@ -161,7 +173,6 @@ export class InvoicesService {
         unitPrice: l.unitPrice,
         lineTotal: l.lineTotal,
       })),
-
       subtotal: inv.subtotal,
       taxTotal: inv.taxTotal,
       total: inv.total,
