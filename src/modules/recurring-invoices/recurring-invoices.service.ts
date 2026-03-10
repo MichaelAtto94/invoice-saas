@@ -3,6 +3,11 @@ import { PrismaService } from '../../database/prisma.service';
 import { getRequestContext } from '../../common/context/request-context';
 import { CreateRecurringDto } from './dto/create-recurring.dto';
 import { Cron } from '@nestjs/schedule';
+import { randomBytes } from 'crypto';
+
+function generatePublicId() {
+  return 'inv_' + randomBytes(5).toString('hex');
+}
 
 
   @Injectable()
@@ -104,8 +109,8 @@ import { Cron } from '@nestjs/schedule';
           data: {
             tenantId,
             clientId: template.clientId,
-
             number: invoiceNumber,
+            publicId: generatePublicId(),
             status: 'DRAFT',
 
             currencyCode: template.currencyCode as any,
@@ -207,8 +212,8 @@ import { Cron } from '@nestjs/schedule';
           data: {
             tenantId,
             clientId: template.clientId,
-
             number: invoiceNumber,
+            publicId: generatePublicId(),
             status: 'DRAFT',
 
             currencyCode: template.currencyCode as any,

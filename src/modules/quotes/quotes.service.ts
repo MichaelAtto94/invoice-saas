@@ -9,10 +9,15 @@ import { getRequestContext } from '../../common/context/request-context';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { applyFx } from '../../common/money/fx';
 import { ConvertQuoteDto } from './dto/convert-quote';
+import { randomBytes } from 'crypto';
 
 
 function pad5(n: number) {
   return String(n).padStart(5, '0');
+}
+
+function generatePublicId() {
+  return 'inv_' + randomBytes(5).toString('hex');
 }
 
 @Injectable()
@@ -248,6 +253,7 @@ export class QuotesService {
           number: invoiceNumber,
           clientId: quote.clientId,
           quoteId: quote.id,
+          publicId: generatePublicId(),
 
           currencyCode,
           fxRate: fxRateInt,

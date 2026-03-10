@@ -10,6 +10,14 @@ import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { getRequestContext } from '../../common/context/request-context';
 import { ClientStatementDto } from './dto/client-statement.dto';
+import { randomBytes } from 'crypto';
+
+
+
+
+function generatePublicId() {
+  return 'inv_' + randomBytes(5).toString('hex');
+}
 
 @Injectable()
 export class ClientsService {
