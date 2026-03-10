@@ -34,6 +34,8 @@ export async function buildClientStatementPdf(input: {
     email?: string | null;
     phone?: string | null;
     address?: string | null;
+    logoUrl?: string | null;
+   
   };
   client: {
     name: string;
@@ -83,23 +85,76 @@ export async function buildClientStatementPdf(input: {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
   });
 
-  const companyName = input.company?.name ?? 'Cloud Motion Ltd';
+  //const companyName = input.company?.name ?? 'Cloud Motion Ltd';
 
   // Header
-    //doc.font('Helvetica-Bold').fontSize(24).text(companyName, 50, 40);
-    const logoPath = path.join(process.cwd(), 'src/assets/logo.png');
+    const companyName = input.company?.name ?? 'Cloud Motion Ltd';
 
-    try {
-      doc.image(logoPath, 50, 40, { width: 100 });
-    } catch (e) {
-      // if logo missing, continue
+    let titleX = 50;
+
+    if (input.company?.logoUrl) {
+      try {
+        const logoPath = path.isAbsolute(input.company.logoUrl)
+          ? input.company.logoUrl
+          : path.join(process.cwd(), input.company.logoUrl);
+
+        doc.image(logoPath, 50, 35, {
+          width: 90,
+          height: 90,
+          fit: [90, 90],
+        });
+
+        titleX = 160;
+      } catch (e) {
+        titleX = 50;
+      }
     }
 
-    doc.font('Helvetica-Bold').fontSize(24).text(companyName, 50, 45);
-    
+    doc.font('Helvetica-Bold').fontSize(24).text(companyName, titleX, 40);
+
+    doc.font('Helvetica').fontSize(10);
+    let companyY = 70;
+
+    if (input.company?.address) {
+      doc.text(input.company.address, titleX, companyY);
+      companyY += 14;
+    }
+    if (input.company?.phone) {
+      doc.text(input.company.phone, titleX, companyY);
+      companyY += 14;
+    }
+    if (input.company?.email) {
+      doc.text(input.company.email, titleX, companyY);
+      companyY += 14;
+    }
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(22)
+      .text('CLIENT STATEMENT', 320, 50, { width: 220, align: 'right' });
+
+    doc
+      .font('Helvetica')
+      .fontSize(11)
+      .text(
+        `Period: ${input.period.from ? formatDate(input.period.from) : 'All time'} to ${
+          input.period.to ? formatDate(input.period.to) : 'Now'
+        }`,
+        320,
+        85,
+        { width: 220, align: 'right' },
+      );
+  const logoPath = path.join(process.cwd(), 'src/assets/logo.png');
+
+  try {
+    doc.image(logoPath, 50, 40, { width: 100 });
+  } catch (e) {
+    // if logo missing, continue
+  }
+
+  doc.font('Helvetica-Bold').fontSize(24).text(companyName, 50, 45);
 
   doc.font('Helvetica').fontSize(10);
-  let companyY = 70;
 
   if (input.company?.address) {
     doc.text(input.company.address, 50, companyY);

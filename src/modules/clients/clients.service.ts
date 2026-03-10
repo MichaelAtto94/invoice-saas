@@ -134,6 +134,10 @@ export class ClientsService {
         select: {
           name: true,
           currencyCode: true,
+          address: true,
+          phone: true,
+          email: true,
+          logoUrl: true,
         },
       }),
     ]);
@@ -141,6 +145,10 @@ export class ClientsService {
     const buffer = await buildClientStatementPdf({
       company: {
         name: tenant?.name ?? 'Cloud Motion Ltd',
+        address: tenant?.address,
+        phone: tenant?.phone,
+        email: tenant?.email,
+        logoUrl: tenant?.logoUrl,
       },
       client: data.client,
       period: data.period,
