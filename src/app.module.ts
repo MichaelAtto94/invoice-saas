@@ -21,6 +21,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { PublicInvoicesModule } from './modules/public-invoices/public-invoices.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
@@ -41,6 +42,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     TenantModule,
     PublicInvoicesModule,
     PaymentsModule,
+    AuditModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

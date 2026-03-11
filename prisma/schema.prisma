@@ -306,6 +306,16 @@ enum RecurringInterval {
   YEARLY
 }
 
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  SEND
+  EXPORT
+}
+
 enum PaymentAttemptStatus {
   PENDING
   SUBMITTED
@@ -399,3 +409,19 @@ model PaymentAttempt {
   @@index([clientId])
 }
 
+model AuditLog {
+  id          String      @id @default(uuid())
+  tenantId    String
+  userId      String?
+  entityType  String
+  entityId    String
+  action      AuditAction
+  description String?
+  metadata    String?
+
+  createdAt   DateTime    @default(now())
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
