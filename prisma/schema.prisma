@@ -76,6 +76,8 @@ model Client {
   address   String?
   createdAt DateTime @default(now())
 
+  paymentAttempts PaymentAttempt[]
+
   tenant            Tenant             @relation(fields: [tenantId], references: [id])
   quotes            Quote[]
   invoices          Invoice[]
@@ -211,6 +213,8 @@ model Invoice {
   quoteId  String? @unique
   publicId String? @unique
 
+  paymentAttempts PaymentAttempt[]
+
   status    String    @default("DRAFT") // DRAFT | SENT | PARTIAL | PAID | VOID
   issueDate DateTime  @default(now())
   dueDate   DateTime?
@@ -302,6 +306,20 @@ enum RecurringInterval {
   YEARLY
 }
 
+enum PaymentAttemptStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum PaymentChannel {
+  MOBILE_MONEY
+  BANK_TRANSFER
+  CASH
+  OTHER
+}
+
 model RecurringInvoice {
   id       String @id @default(uuid())
   tenantId String
@@ -348,3 +366,36 @@ model ExchangeRate {
 
   @@index([tenantId])
 }
+
+
+model PaymentAttempt {
+  id            String               @id @default(uuid())
+  tenantId      String
+  invoiceId      String
+  clientId      String
+
+  channel       PaymentChannel
+  status        PaymentAttemptStatus @default(PENDING)
+
+  amount        Int
+  payerName     String?
+  payerPhone    String?
+  reference     String?
+  notes         String?
+  proofUrl      String?
+
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdReceiptId String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  invoice       Invoice   @relation(fields: [invoiceId], references: [id])
+  client        Client    @relation(fields: [clientId], references: [id])
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@index([clientId])
+}
+
