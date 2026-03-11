@@ -81,7 +81,7 @@ export class PaymentsService {
     return attempt;
   }
 
-  async submitProof(paymentAttemptId: string, dto: SubmitPaymentProofDto) {
+  async submitProof(paymentAttemptId: string, dto?: SubmitPaymentProofDto) {
     const attempt = await this.prisma.paymentAttempt.findFirst({
       where: { id: paymentAttemptId },
       select: {
@@ -96,12 +96,14 @@ export class PaymentsService {
       throw new BadRequestException('Payment attempt already approved');
     }
 
+    const safeDto = dto ?? {};
+
     return this.prisma.paymentAttempt.update({
       where: { id: paymentAttemptId },
       data: {
-        reference: dto.reference?.trim() || null,
-        notes: dto.notes?.trim() || null,
-        proofUrl: dto.proofUrl?.trim() || null,
+        reference: safeDto.reference?.trim() || null,
+        notes: safeDto.notes?.trim() || null,
+        proofUrl: safeDto.proofUrl?.trim() || null,
         status: 'SUBMITTED',
       },
       select: {
