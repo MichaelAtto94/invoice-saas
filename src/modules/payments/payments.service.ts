@@ -321,4 +321,94 @@ export class PaymentsService {
       },
     });
   }
+
+  async stats() {
+    const tenantId = this.requireTenantId();
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const attempts = await this.prisma.paymentAttempt.findMany({
+      where: { tenantId },
+      select: {
+        status: true,
+        channel: true,
+        amount: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totals = {
+      pending: 0,
+      submitted: 0,
+      approved: 0,
+      rejected: 0,
+      amountPending: 0,
+      amountApproved: 0,
+      amountRejected: 0,
+    };
+
+    const byChannelMap: Record<
+      string,
+      { channel: string; count: number; amount: number }
+    > = {};
+
+    let thisMonthAttempts = 0;
+    let thisMonthApprovedAmount = 0;
+
+    for (const a of attempts) {
+      if (a.status === 'PENDING') {
+        totals.pending += 1;
+        totals.amountPending += a.amount ?? 0;
+      }
+
+      if (a.status === 'SUBMITTED') {
+        totals.submitted += 1;
+        totals.amountPending += a.amount ?? 0;
+      }
+
+      if (a.status === 'APPROVED') {
+        totals.approved += 1;
+        totals.amountApproved += a.amount ?? 0;
+      }
+
+      if (a.status === 'REJECTED') {
+        totals.rejected += 1;
+        totals.amountRejected += a.amount ?? 0;
+      }
+
+      const key = a.channel;
+      if (!byChannelMap[key]) {
+        byChannelMap[key] = {
+          channel: key,
+          count: 0,
+          amount: 0,
+        };
+      }
+
+      byChannelMap[key].count += 1;
+      byChannelMap[key].amount += a.amount ?? 0;
+
+      if (a.createdAt >= monthStart) {
+        thisMonthAttempts += 1;
+        if (a.status === 'APPROVED') {
+          thisMonthApprovedAmount += a.amount ?? 0;
+        }
+      }
+    }
+
+    const byChannel = Object.values(byChannelMap).sort(
+      (a, b) => b.amount - a.amount,
+    );
+
+    return {
+      totals,
+      byChannel,
+      thisMonth: {
+        attempts: thisMonthAttempts,
+        approvedAmount: thisMonthApprovedAmount,
+      },
+    };
+  }
 }

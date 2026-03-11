@@ -41,4 +41,10 @@ export class PaymentsController {
   reject(@Param('id') id: string, @Body() dto: ReviewPaymentDto) {
     return this.payments.rejectPayment(id, dto);
   }
+
+  @Roles('OWNER', 'ADMIN', 'STAFF')
+  @Get('payments/stats')
+  stats() {
+    return this.payments.stats();
+  }
 }
