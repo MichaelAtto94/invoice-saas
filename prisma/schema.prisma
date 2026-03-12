@@ -103,6 +103,18 @@ model Item {
   @@index([tenantId])
 }
 
+model InvoiceView {
+  id        String   @id @default(uuid())
+  tenantId  String
+  invoiceId String
+  publicId  String
+  viewedAt  DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([publicId])
+  @@index([tenantId])
+}
+
 model RecurringInvoiceLine {
   id String @id @default(uuid())
 

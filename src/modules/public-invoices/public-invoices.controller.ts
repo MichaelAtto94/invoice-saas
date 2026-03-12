@@ -12,6 +12,11 @@ export class PublicInvoicesController {
     return this.service.findByPublicId(publicId);
   }
 
+  @Get(':publicId/views')
+  getInvoiceViews(@Param('publicId') publicId: string) {
+    return this.service.getViewStats(publicId);
+  }
+
   @Get(':publicId/pdf')
   async getInvoicePdf(
     @Param('publicId') publicId: string,
@@ -20,35 +25,35 @@ export class PublicInvoicesController {
     const { invoice, tenant } =
       await this.service.findPdfDataByPublicId(publicId);
 
-   const buffer = await buildInvoicePdf({
-     company: {
-       name: tenant?.name ?? 'Company',
-       address: tenant?.address ?? null,
-       phone: tenant?.phone ?? null,
-       email: tenant?.email ?? null,
-       logoUrl: tenant?.logoUrl ?? null,
-     },
-     invoiceNumber: invoice.number,
-     issueDate: invoice.issueDate,
-     dueDate: invoice.dueDate,
-     status: invoice.status,
-     currencyCode: invoice.currencyCode,
-     clientName: invoice.client.name,
-     clientEmail: invoice.client.email,
-     clientPhone: invoice.client.phone,
-     clientAddress: invoice.client.address,
-     subtotal: invoice.subtotal,
-     taxTotal: invoice.taxTotal,
-     total: invoice.total,
-     amountPaid: invoice.amountPaid,
-     lines: invoice.lines.map((l) => ({
-       name: l.name,
-       description: l.description,
-       quantity: l.quantity,
-       unitPrice: l.unitPrice,
-       lineTotal: l.lineTotal,
-     })),
-   });
+    const buffer = await buildInvoicePdf({
+      company: {
+        name: tenant?.name ?? 'Company',
+        address: tenant?.address ?? null,
+        phone: tenant?.phone ?? null,
+        email: tenant?.email ?? null,
+        logoUrl: tenant?.logoUrl ?? null,
+      },
+      invoiceNumber: invoice.number,
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      status: invoice.status,
+      currencyCode: invoice.currencyCode,
+      clientName: invoice.client.name,
+      clientEmail: invoice.client.email,
+      clientPhone: invoice.client.phone,
+      clientAddress: invoice.client.address,
+      subtotal: invoice.subtotal,
+      taxTotal: invoice.taxTotal,
+      total: invoice.total,
+      amountPaid: invoice.amountPaid,
+      lines: invoice.lines.map((l) => ({
+        name: l.name,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: l.lineTotal,
+      })),
+    });
 
     const filename = `${invoice.number}.pdf`;
 
