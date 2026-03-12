@@ -241,4 +241,55 @@ export class InvoicesService {
       },
     });
   }
+
+  async getInvoiceSummary(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id, tenantId },
+      include: {
+        client: true,
+        lines: true,
+        receipts: true,
+        quote: true,
+      },
+    });
+
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    const activity = await this.prisma.invoiceActivity.findMany({
+      where: {
+        tenantId,
+        invoiceId: id,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const paymentAttempts = await this.prisma.paymentAttempt.findMany({
+      where: {
+        tenantId,
+        invoiceId: id,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const total = invoice.total ?? 0;
+    const amountPaid = invoice.amountPaid ?? 0;
+    const balance = Math.max(0, total - amountPaid);
+
+    return {
+      invoice,
+      summary: {
+        total,
+        amountPaid,
+        balance,
+        isPaid: balance <= 0,
+      },
+      activity,
+      paymentAttempts,
+      receipts: invoice.receipts,
+    };
+  }
 }

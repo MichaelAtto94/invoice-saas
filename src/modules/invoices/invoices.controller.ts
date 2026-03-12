@@ -55,4 +55,9 @@ export class InvoicesController {
   payments(@Param('id') id: string) {
     return this.invoices.getInvoicePayments(id);
   }
+
+  @Get(':id/summary')
+  summary(@Param('id') id: string) {
+    return this.invoices.getInvoiceSummary(id);
+  }
 }
