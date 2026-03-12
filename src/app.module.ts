@@ -23,6 +23,7 @@ import { TenantModule } from './modules/tenant/tenant.module';
 import { PublicInvoicesModule } from './modules/public-invoices/public-invoices.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     PublicInvoicesModule,
     PaymentsModule,
     AuditModule,
+    SearchModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
