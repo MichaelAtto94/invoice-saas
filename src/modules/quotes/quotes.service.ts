@@ -300,6 +300,15 @@ export class QuotesService {
         } as any,
       });
 
+      await tx.invoiceActivity.create({
+        data: {
+          tenantId,
+          invoiceId: invoice.id,
+          action: 'CREATED',
+          description: 'Invoice created from quote',
+        },
+      });
+
       return invoice;
     });
   }

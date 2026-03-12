@@ -1,8 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  UnauthorizedException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { buildInvoicePdf } from '../../common/pdf/invoice-pdf';
-
-import { UnauthorizedException } from '@nestjs/common';
 import { getRequestContext } from '../../common/context/request-context';
 import { MailerService } from '../../common/mailer/mailer.service';
 
@@ -14,7 +17,10 @@ export class InvoicesService {
   ) {}
 
   async list() {
+    const tenantId = this.requireTenantId();
+
     return this.prisma.invoice.findMany({
+      where: { tenantId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -64,14 +70,25 @@ export class InvoicesService {
       select: { id: true, number: true, status: true },
     });
 
+    await this.prisma.invoiceActivity.create({
+      data: {
+        tenantId,
+        invoiceId: updated.id,
+        action: 'SENT',
+        description: 'Invoice sent to client',
+      },
+    });
+
     return { ok: true, message: 'Invoice sent', invoice: updated };
   }
 
   async getById(id: string) {
+    const tenantId = this.requireTenantId();
+
     if (!id) throw new BadRequestException('id is required');
 
     const inv = await this.prisma.invoice.findFirst({
-      where: { id },
+      where: { id, tenantId },
       include: { client: true, lines: true, quote: true, receipts: true },
     });
 
@@ -118,7 +135,6 @@ export class InvoicesService {
     return { ok: true, sentTo: inv.client.email, invoiceNumber: inv.number };
   }
 
-  // ✅ Build PDF
   // ✅ Build PDF
   async buildInvoicePdf(
     id: string,
@@ -180,5 +196,19 @@ export class InvoicesService {
     });
 
     return { filename: `${inv.number}.pdf`, buffer };
+  }
+
+  async getInvoiceActivity(invoiceId: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!invoiceId) throw new BadRequestException('invoiceId is required');
+
+    return this.prisma.invoiceActivity.findMany({
+      where: {
+        tenantId,
+        invoiceId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

@@ -45,4 +45,9 @@ export class InvoicesController {
   email(@Param('id') id: string) {
     return this.invoices.emailInvoice(id);
   }
+
+  @Get(':id/activity')
+  activity(@Param('id') id: string) {
+    return this.invoices.getInvoiceActivity(id);
+  }
 }

@@ -205,6 +205,17 @@ model QuoteLine {
   @@index([tenantId, quoteId])
 }
 
+model InvoiceActivity {
+  id         String   @id @default(uuid())
+  tenantId   String
+  invoiceId  String
+  action     String
+  description String?
+  createdAt  DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
 model Invoice {
   id       String  @id @default(uuid())
   tenantId String

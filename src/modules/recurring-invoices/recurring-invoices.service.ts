@@ -75,6 +75,7 @@ export class RecurringInvoicesService {
         },
       },
     });
+    
   }
 
   async runRecurring() {
@@ -108,7 +109,7 @@ export class RecurringInvoicesService {
         data: { invoiceNext: seq.invoiceNext + 1 },
       });
 
-      await this.prisma.invoice.create({
+      const createdInvoice = await this.prisma.invoice.create({
         data: {
           tenantId,
           clientId: template.clientId,
@@ -145,6 +146,15 @@ export class RecurringInvoicesService {
         },
       });
 
+      await this.prisma.invoiceActivity.create({
+        data: {
+          tenantId,
+          invoiceId: createdInvoice.id,
+          action: 'CREATED',
+          description: 'Invoice created from recurring template',
+        },
+      });
+
       created++;
 
       const next = new Date(template.nextRunDate);
@@ -172,6 +182,8 @@ export class RecurringInvoicesService {
         },
       });
     }
+
+    
 
     return {
       templatesProcessed: templates.length,
@@ -211,7 +223,7 @@ export class RecurringInvoicesService {
         data: { invoiceNext: seq.invoiceNext + 1 },
       });
 
-      await this.prisma.invoice.create({
+      const createdInvoice = await this.prisma.invoice.create({
         data: {
           tenantId,
           clientId: template.clientId,
@@ -245,6 +257,15 @@ export class RecurringInvoicesService {
               lineTotal: l.lineTotal,
             })),
           },
+        },
+      });
+
+      await this.prisma.invoiceActivity.create({
+        data: {
+          tenantId,
+          invoiceId: createdInvoice.id,
+          action: 'CREATED',
+          description: 'Invoice created from recurring template',
         },
       });
 
