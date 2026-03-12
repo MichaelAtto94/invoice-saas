@@ -59,6 +59,12 @@ export class ClientsController {
   }
 
   @Roles('OWNER', 'ADMIN', 'STAFF')
+  @Get(':id/dashboard')
+  dashboard(@Param('id') id: string) {
+    return this.clients.dashboard(id);
+  }
+
+  @Roles('OWNER', 'ADMIN', 'STAFF')
   @Get(':id/statement/pdf')
   async statementPdf(
     @Param('id') id: string,

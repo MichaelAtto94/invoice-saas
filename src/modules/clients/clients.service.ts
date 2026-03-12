@@ -234,7 +234,6 @@ export class ClientsService {
         (openingInvoices._sum.baseTotal ?? 0) -
         (openingReceipts._sum.amount ?? 0);
     }
-    
 
     const invoiceWhere: any = {
       tenantId,
@@ -322,45 +321,135 @@ export class ClientsService {
     const ledger = this.buildLedger(invoices, receipts, openingBalance);
   }
 
-
-
   private buildLedger(
-  invoices: any[],
-  receipts: any[],
-  openingBalance: number,
-) {
-  const entries: any[] = [];
+    invoices: any[],
+    receipts: any[],
+    openingBalance: number,
+  ) {
+    const entries: any[] = [];
 
-  for (const inv of invoices) {
-    entries.push({
-      date: inv.issueDate,
-      type: 'INVOICE',
-      description: `Invoice ${inv.number}`,
-      debit: inv.baseTotal ?? 0,
-      credit: 0,
+    for (const inv of invoices) {
+      entries.push({
+        date: inv.issueDate,
+        type: 'INVOICE',
+        description: `Invoice ${inv.number}`,
+        debit: inv.baseTotal ?? 0,
+        credit: 0,
+      });
+    }
+
+    for (const r of receipts) {
+      entries.push({
+        date: r.createdAt,
+        type: 'RECEIPT',
+        description: `Receipt ${r.number}`,
+        debit: 0,
+        credit: r.amount ?? 0,
+      });
+    }
+
+    entries.sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+
+    let balance = openingBalance;
+
+    for (const e of entries) {
+      balance += e.debit;
+      balance -= e.credit;
+      e.balance = balance;
+    }
+
+    return entries;
+  }
+
+  async dashboard(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const client = await this.prisma.client.findFirst({
+      where: { id, tenantId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        createdAt: true,
+      },
     });
-  }
 
-  for (const r of receipts) {
-    entries.push({
-      date: r.createdAt,
-      type: 'RECEIPT',
-      description: `Receipt ${r.number}`,
-      debit: 0,
-      credit: r.amount ?? 0,
+    if (!client) throw new NotFoundException('Client not found');
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: { tenantId, clientId: id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        issueDate: true,
+        dueDate: true,
+        total: true,
+        amountPaid: true,
+        publicId: true,
+        createdAt: true,
+      },
     });
+
+    const receipts = await this.prisma.receipt.findMany({
+      where: {
+        tenantId,
+        invoice: {
+          clientId: id,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        number: true,
+        amount: true,
+        method: true,
+        reference: true,
+        createdAt: true,
+        invoice: {
+          select: {
+            id: true,
+            number: true,
+          },
+        },
+      },
+    });
+
+    const totalInvoiced = invoices.reduce(
+      (sum, inv) => sum + (inv.total ?? 0),
+      0,
+    );
+    const totalPaid = receipts.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+    const outstanding = Math.max(0, totalInvoiced - totalPaid);
+
+    const overdueInvoices = invoices.filter(
+      (inv) =>
+        inv.dueDate &&
+        new Date(inv.dueDate).getTime() < Date.now() &&
+        inv.status !== 'PAID' &&
+        inv.status !== 'VOID',
+    );
+
+    return {
+      client,
+      summary: {
+        invoicesCount: invoices.length,
+        receiptsCount: receipts.length,
+        overdueCount: overdueInvoices.length,
+        totalInvoiced,
+        totalPaid,
+        outstanding,
+      },
+      invoices,
+      receipts,
+      overdueInvoices,
+    };
   }
-
-  entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  let balance = openingBalance;
-
-  for (const e of entries) {
-    balance += e.debit;
-    balance -= e.credit;
-    e.balance = balance;
-  }
-
-  return entries;
-}
 }
