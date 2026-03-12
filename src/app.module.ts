@@ -24,6 +24,7 @@ import { PublicInvoicesModule } from './modules/public-invoices/public-invoices.
 import { AuditModule } from './modules/audit/audit.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { SearchModule } from './modules/search/search.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { SearchModule } from './modules/search/search.module';
     PaymentsModule,
     AuditModule,
     SearchModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

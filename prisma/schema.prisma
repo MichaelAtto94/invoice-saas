@@ -471,3 +471,21 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
 }
+
+model Notification {
+  id          String   @id @default(uuid())
+  tenantId    String
+  userId      String?
+  type        String
+  title       String
+  message     String?
+  entityType  String?
+  entityId    String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  readAt      DateTime?
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+}

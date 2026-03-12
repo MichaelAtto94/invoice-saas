@@ -10,6 +10,7 @@ import { StartPaymentDto } from './dto/start-payment.dto';
 import { SubmitPaymentProofDto } from './dto/submit-payment-proof.dto';
 import { ReviewPaymentDto } from './dto/review-payment.dto';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 
 @Injectable()
@@ -17,6 +18,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private requireTenantId(): string {
@@ -248,16 +250,24 @@ export class PaymentsService {
         },
       });
 
-            await this.audit.log({
+      await this.audit.log({
+        entityType: 'PaymentAttempt',
+        entityId: id,
+        action: 'APPROVE',
+        description: `Approved payment attempt for invoice ${attempt.invoice.number}`,
+        metadata: {
+          receiptId: receipt.id,
+          receiptNumber: receipt.number,
+          amount: receipt.amount,
+        },
+      });
+
+            await this.notifications.create({
+              type: 'PAYMENT_APPROVED',
+              title: 'Payment approved',
+              message: `Payment approved for invoice ${attempt.invoice.number}`,
               entityType: 'PaymentAttempt',
               entityId: id,
-              action: 'APPROVE',
-              description: `Approved payment attempt for invoice ${attempt.invoice.number}`,
-              metadata: {
-                receiptId: receipt.id,
-                receiptNumber: receipt.number,
-                amount: receipt.amount,
-              },
             });
 
       return {
@@ -291,17 +301,17 @@ export class PaymentsService {
       );
     }
 
-        await this.audit.log({
-          entityType: 'PaymentAttempt',
-          entityId: id,
-          action: 'REJECT',
-          description: 'Rejected payment attempt',
-          metadata: {
-            notes: dto.notes ?? null,
-          },
-        });
+    await this.audit.log({
+      entityType: 'PaymentAttempt',
+      entityId: id,
+      action: 'REJECT',
+      description: 'Rejected payment attempt',
+      metadata: {
+        notes: dto.notes ?? null,
+      },
+    });
 
-    return this.prisma.paymentAttempt.update({
+    const updated = await this.prisma.paymentAttempt.update({
       where: { id },
       data: {
         status: 'REJECTED',
@@ -315,6 +325,16 @@ export class PaymentsService {
         notes: true,
       },
     });
+
+    await this.notifications.create({
+      type: 'PAYMENT_SUBMITTED',
+      title: 'Payment submitted',
+      message: `Payment proof submitted for attempt ${updated.id}`,
+      entityType: 'PaymentAttempt',
+      entityId: updated.id,
+    });
+
+    return updated;
   }
 
   async listPending() {
