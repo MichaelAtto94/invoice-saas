@@ -11,6 +11,18 @@ export class PublicInvoicesService {
       include: {
         client: true,
         lines: true,
+        paymentAttempts: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            status: true,
+            channel: true,
+            amount: true,
+            createdAt: true,
+            reference: true,
+          },
+        },
       },
     });
 
@@ -26,7 +38,26 @@ export class PublicInvoicesService {
       },
     });
 
-    return invoice;
+    const balance = Math.max(
+      0,
+      (invoice.total ?? 0) - (invoice.amountPaid ?? 0),
+    );
+    const isPaid = balance <= 0;
+
+    return {
+      ...invoice,
+      payment: {
+        enabled: !isPaid,
+        balance,
+        isPaid,
+        allowedChannels: ['MOBILE_MONEY', 'BANK_TRANSFER', 'CASH', 'OTHER'],
+        instructions: !isPaid
+          ? 'Use the payment start endpoint to submit your payment.'
+          : 'This invoice is fully paid.',
+        startPaymentEndpoint: `/public/payments/start`,
+        recentAttempts: invoice.paymentAttempts,
+      },
+    };
   }
 
   async findPdfDataByPublicId(publicId: string) {
