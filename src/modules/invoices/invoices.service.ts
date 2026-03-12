@@ -211,4 +211,34 @@ export class InvoicesService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async getInvoicePayments(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id, tenantId },
+      select: { id: true, number: true },
+    });
+
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    return this.prisma.paymentAttempt.findMany({
+      where: {
+        tenantId,
+        invoiceId: id,
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        receipt: {
+          select: {
+            id: true,
+            number: true,
+            amount: true,
+          },
+        },
+      },
+    });
+  }
 }

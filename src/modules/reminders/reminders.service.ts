@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../database/prisma.service';
 import { MailerService } from '../../common/mailer/mailer.service';
+import { getRequestContext } from 'src/common/context/request-context';
 
 @Injectable()
 export class RemindersService {
@@ -48,9 +49,49 @@ export class RemindersService {
         pdfBuffer: Buffer.from(''),
       });
 
+      await this.prisma.reminderLog.create({
+        data: {
+          tenantId: inv.tenantId,
+          invoiceId: inv.id,
+          clientId: inv.client.id,
+          email: inv.client.email,
+          reminderType: 'OVERDUE',
+          subject,
+        },
+      });
+
       emailsSent++;
     }
 
     console.log(`[Reminders] Sent ${emailsSent} overdue reminder emails`);
+  }
+
+  async history() {
+    const tenantId = getRequestContext()?.tenantId;
+    if (!tenantId) throw new Error('Missing tenant context');
+
+    return this.prisma.reminderLog.findMany({
+      where: { tenantId },
+      orderBy: { sentAt: 'desc' },
+      include: {
+        invoice: {
+          select: {
+            id: true,
+            number: true,
+            publicId: true,
+            total: true,
+            amountPaid: true,
+          },
+        },
+        client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      take: 100,
+    });
   }
 }

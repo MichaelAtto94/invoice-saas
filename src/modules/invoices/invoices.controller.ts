@@ -50,4 +50,9 @@ export class InvoicesController {
   activity(@Param('id') id: string) {
     return this.invoices.getInvoiceActivity(id);
   }
+
+  @Get(':id/payments')
+  payments(@Param('id') id: string) {
+    return this.invoices.getInvoicePayments(id);
+  }
 }

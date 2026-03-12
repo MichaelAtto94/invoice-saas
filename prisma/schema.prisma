@@ -13,10 +13,10 @@ model Tenant {
   currencyCode CurrencyCode @default(ZMW)
   createdAt    DateTime     @default(now())
 
-  address    String?
-  phone      String?
-  email      String?
-  logoUrl    String?
+  address String?
+  phone   String?
+  email   String?
+  logoUrl String?
 
   receipts Receipt[]
 
@@ -25,6 +25,25 @@ model Tenant {
   clients   Client[]
   items     Item[]
   sequences DocumentSequence?
+}
+
+model ReminderLog {
+  id           String   @id @default(uuid())
+  tenantId     String
+  invoiceId    String
+  clientId     String
+  email        String?
+  reminderType String
+  subject      String
+  sentAt       DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  client  Client  @relation(fields: [clientId], references: [id])
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@index([clientId])
+  @@index([sentAt])
 }
 
 model User {
@@ -82,6 +101,7 @@ model Client {
   quotes            Quote[]
   invoices          Invoice[]
   recurringInvoices RecurringInvoice[]
+  reminderLogs      ReminderLog[]
 
   @@index([tenantId])
 }
@@ -218,12 +238,12 @@ model QuoteLine {
 }
 
 model InvoiceActivity {
-  id         String   @id @default(uuid())
-  tenantId   String
-  invoiceId  String
-  action     String
+  id          String   @id @default(uuid())
+  tenantId    String
+  invoiceId   String
+  action      String
   description String?
-  createdAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([invoiceId])
 }
@@ -237,6 +257,7 @@ model Invoice {
   publicId String? @unique
 
   paymentAttempts PaymentAttempt[]
+  reminderLogs    ReminderLog[]
 
   status    String    @default("DRAFT") // DRAFT | SENT | PARTIAL | PAID | VOID
   issueDate DateTime  @default(now())
@@ -307,8 +328,9 @@ model Receipt {
 
   createdAt DateTime @default(now())
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id])
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  paymentAttempts PaymentAttempt[]
 
   @@unique([tenantId, number])
   @@index([tenantId, invoiceId])
@@ -400,32 +422,33 @@ model ExchangeRate {
   @@index([tenantId])
 }
 
-
 model PaymentAttempt {
-  id            String               @id @default(uuid())
-  tenantId      String
-  invoiceId      String
-  clientId      String
+  id        String @id @default(uuid())
+  tenantId  String
+  invoiceId String
+  clientId  String
 
-  channel       PaymentChannel
-  status        PaymentAttemptStatus @default(PENDING)
+  channel PaymentChannel
+  status  PaymentAttemptStatus @default(PENDING)
 
-  amount        Int
-  payerName     String?
-  payerPhone    String?
-  reference     String?
-  notes         String?
-  proofUrl      String?
+  amount     Int
+  payerName  String?
+  payerPhone String?
+  reference  String?
+  notes      String?
+  proofUrl   String?
 
-  reviewedBy    String?
-  reviewedAt    DateTime?
+  reviewedBy       String?
+  reviewedAt       DateTime?
   createdReceiptId String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  invoice       Invoice   @relation(fields: [invoiceId], references: [id])
-  client        Client    @relation(fields: [clientId], references: [id])
+  receipt Receipt? @relation(fields: [createdReceiptId], references: [id])
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  client  Client  @relation(fields: [clientId], references: [id])
 
   @@index([tenantId])
   @@index([invoiceId])
@@ -442,7 +465,7 @@ model AuditLog {
   description String?
   metadata    String?
 
-  createdAt   DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([entityType, entityId])
