@@ -13,8 +13,6 @@ import { ClientStatementDto } from './dto/client-statement.dto';
 import { randomBytes } from 'crypto';
 
 
-
-
 function generatePublicId() {
   return 'inv_' + randomBytes(5).toString('hex');
 }
@@ -73,6 +71,7 @@ export class ClientsService {
         phone: true,
         address: true,
         createdAt: true,
+        portalToken: true,
       },
     });
   }
@@ -136,6 +135,7 @@ export class ClientsService {
     await this.prisma.client.delete({ where: { id } });
     return { ok: true };
   }
+
 
   async statementPdf(id: string, query: ClientStatementDto) {
     const tenantId = this.requireTenantId();

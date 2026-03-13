@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { buildClientStatementPdf } from '../../common/pdf/client-statement-pdf';
 
 @Injectable()
 export class ClientPortalService {
@@ -83,6 +84,74 @@ export class ClientPortalService {
       },
       invoices,
       receipts,
+    };
+  }
+
+  async getStatementPdfByToken(token: string) {
+    const data = await this.getByToken(token);
+
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id: data.client.tenantId },
+      select: {
+        name: true,
+        currencyCode: true,
+        address: true,
+        phone: true,
+        email: true,
+        logoUrl: true,
+      },
+    });
+
+    const buffer = await buildClientStatementPdf({
+      company: {
+        name: tenant?.name ?? 'Company',
+        address: tenant?.address ?? null,
+        phone: tenant?.phone ?? null,
+        email: tenant?.email ?? null,
+        logoUrl: tenant?.logoUrl ?? null,
+      },
+      client: {
+        name: data.client.name,
+        email: data.client.email,
+        phone: data.client.phone,
+        address: data.client.address,
+      },
+      period: {
+        from: null,
+        to: null,
+      },
+      summary: {
+        openingBalance: 0,
+        invoiceTotal: data.summary.totalInvoiced,
+        receiptTotal: data.summary.totalPaid,
+        closingBalance: data.summary.outstanding,
+      },
+      invoices: data.invoices.map((inv) => ({
+        number: inv.number,
+        status: inv.status,
+        issueDate: inv.issueDate,
+        dueDate: inv.dueDate,
+        baseTotal: inv.total,
+        amountPaid: inv.amountPaid,
+      })),
+      receipts: data.receipts.map((r) => ({
+        number: r.number,
+        amount: r.amount,
+        method: r.method,
+        reference: r.reference,
+        createdAt: r.createdAt,
+        invoice: r.invoice
+          ? {
+              number: r.invoice.number,
+            }
+          : null,
+      })),
+      currencyCode: tenant?.currencyCode ?? 'ZMW',
+    });
+
+    return {
+      filename: `client-statement-${data.client.name}.pdf`,
+      buffer,
     };
   }
 }
