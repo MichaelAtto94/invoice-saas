@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { buildClientStatementPdf } from '../../common/pdf/client-statement-pdf';
+import { buildInvoicePdf } from '../../common/pdf/invoice-pdf';
 
 @Injectable()
 export class ClientPortalService {
@@ -151,6 +152,117 @@ export class ClientPortalService {
 
     return {
       filename: `client-statement-${data.client.name}.pdf`,
+      buffer,
+    };
+  }
+
+  async listInvoicesByToken(token: string) {
+    const client = await this.prisma.client.findFirst({
+      where: { portalToken: token },
+      select: {
+        id: true,
+        tenantId: true,
+        name: true,
+      },
+    });
+
+    if (!client) throw new NotFoundException('Client portal not found');
+
+    return this.prisma.invoice.findMany({
+      where: {
+        tenantId: client.tenantId,
+        clientId: client.id,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        number: true,
+        publicId: true,
+        status: true,
+        issueDate: true,
+        dueDate: true,
+        total: true,
+        amountPaid: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async getInvoiceByTokenAndPublicId(token: string, publicId: string) {
+    const client = await this.prisma.client.findFirst({
+      where: { portalToken: token },
+      select: {
+        id: true,
+        tenantId: true,
+      },
+    });
+
+    if (!client) throw new NotFoundException('Client portal not found');
+
+    const invoice = await this.prisma.invoice.findFirst({
+      where: {
+        tenantId: client.tenantId,
+        clientId: client.id,
+        publicId,
+      },
+      include: {
+        client: true,
+        lines: true,
+        receipts: true,
+      },
+    });
+
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    return invoice;
+  }
+
+  async getInvoicePdfByTokenAndPublicId(token: string, publicId: string) {
+    const invoice = await this.getInvoiceByTokenAndPublicId(token, publicId);
+
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id: invoice.tenantId },
+      select: {
+        name: true,
+        address: true,
+        phone: true,
+        email: true,
+        logoUrl: true,
+      },
+    });
+
+    const buffer = await buildInvoicePdf({
+      company: {
+        name: tenant?.name ?? 'Company',
+        address: tenant?.address ?? null,
+        phone: tenant?.phone ?? null,
+        email: tenant?.email ?? null,
+        logoUrl: tenant?.logoUrl ?? null,
+      },
+      invoiceNumber: invoice.number,
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      status: invoice.status,
+      currencyCode: invoice.currencyCode,
+      clientName: invoice.client.name,
+      clientEmail: invoice.client.email,
+      clientPhone: invoice.client.phone,
+      clientAddress: invoice.client.address,
+      lines: invoice.lines.map((l) => ({
+        name: l.name,
+        description: l.description,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        lineTotal: l.lineTotal,
+      })),
+      subtotal: invoice.subtotal,
+      taxTotal: invoice.taxTotal,
+      total: invoice.total,
+      amountPaid: invoice.amountPaid,
+    });
+
+    return {
+      filename: `${invoice.number}.pdf`,
       buffer,
     };
   }

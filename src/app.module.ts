@@ -27,9 +27,18 @@ import { SearchModule } from './modules/search/search.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { ClientPortalModule } from './modules/client-portal/client-portal.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60_000,
+          limit: 60,
+        },
+      ],
+    }),
     ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
@@ -56,6 +65,7 @@ import { ClientPortalModule } from './modules/client-portal/client-portal.module
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     MailerService,
   ],
 })

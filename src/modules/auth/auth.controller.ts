@@ -4,6 +4,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -15,6 +16,7 @@ export class AuthController {
     return this.auth.registerTenantOwner(dto);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Public()
   @Post('login')
   login(@Body() dto: LoginDto) {

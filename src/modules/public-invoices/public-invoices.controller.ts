@@ -2,11 +2,13 @@ import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PublicInvoicesService } from './public-invoices.service';
 import { buildInvoicePdf } from '../../common/pdf/invoice-pdf';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('public/invoices')
 export class PublicInvoicesController {
   constructor(private readonly service: PublicInvoicesService) {}
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Get(':publicId')
   getInvoice(@Param('publicId') publicId: string) {
     return this.service.findByPublicId(publicId);
@@ -17,6 +19,7 @@ export class PublicInvoicesController {
     return this.service.getViewStats(publicId);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Get(':publicId/pdf')
   async getInvoicePdf(
     @Param('publicId') publicId: string,
