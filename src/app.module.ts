@@ -28,6 +28,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { ClientPortalModule } from './modules/client-portal/client-portal.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
     NotificationsModule,
     UploadsModule,
     ClientPortalModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
