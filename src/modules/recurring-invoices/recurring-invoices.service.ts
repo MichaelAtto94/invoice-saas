@@ -75,7 +75,6 @@ export class RecurringInvoicesService {
         },
       },
     });
-    
   }
 
   async runRecurring() {
@@ -182,8 +181,6 @@ export class RecurringInvoicesService {
         },
       });
     }
-
-    
 
     return {
       templatesProcessed: templates.length,
@@ -300,5 +297,153 @@ export class RecurringInvoicesService {
     console.log(
       `[Recurring Cron] processed=${templates.length}, invoicesCreated=${created}`,
     );
+  }
+
+  async list() {
+    const tenantId = this.requireTenantId();
+
+    return this.prisma.recurringInvoice.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        lines: true,
+      },
+    });
+  }
+
+  async getById(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const recurring = await this.prisma.recurringInvoice.findFirst({
+      where: { id, tenantId },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        lines: true,
+      },
+    });
+
+    if (!recurring)
+      throw new BadRequestException('Recurring invoice not found');
+
+    return recurring;
+  }
+
+  async update(id: string, dto: any) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const existing = await this.prisma.recurringInvoice.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+
+    if (!existing) throw new BadRequestException('Recurring invoice not found');
+
+    return this.prisma.recurringInvoice.update({
+      where: { id },
+      data: {
+        name: dto.name?.trim() || undefined,
+        interval: dto.interval ?? undefined,
+        intervalCount: dto.intervalCount ?? undefined,
+        nextRunDate: dto.nextRunDate ? new Date(dto.nextRunDate) : undefined,
+        issueDays: dto.issueDays ?? undefined,
+        dueDays: dto.dueDays ?? undefined,
+        active: dto.active ?? undefined,
+      },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        lines: true,
+      },
+    });
+  }
+
+  async pause(id: string) {
+    const tenantId = this.requireTenantId();
+
+    const existing = await this.prisma.recurringInvoice.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+
+    if (!existing) throw new BadRequestException('Recurring invoice not found');
+
+    return this.prisma.recurringInvoice.update({
+      where: { id },
+      data: { active: false },
+      select: {
+        id: true,
+        name: true,
+        active: true,
+      },
+    });
+  }
+
+  async resume(id: string) {
+    const tenantId = this.requireTenantId();
+
+    const existing = await this.prisma.recurringInvoice.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+
+    if (!existing) throw new BadRequestException('Recurring invoice not found');
+
+    return this.prisma.recurringInvoice.update({
+      where: { id },
+      data: { active: true },
+      select: {
+        id: true,
+        name: true,
+        active: true,
+      },
+    });
+  }
+
+  async remove(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const existing = await this.prisma.recurringInvoice.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+
+    if (!existing) throw new BadRequestException('Recurring invoice not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.recurringInvoiceLine.deleteMany({
+        where: { recurringInvoiceId: id },
+      });
+
+      await tx.recurringInvoice.delete({
+        where: { id },
+      });
+    });
+
+    return { ok: true };
   }
 }
