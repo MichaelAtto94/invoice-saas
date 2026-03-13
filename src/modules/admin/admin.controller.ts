@@ -11,4 +11,10 @@ export class AdminController {
   analytics() {
     return this.admin.analytics();
   }
+
+  @Roles('OWNER', 'ADMIN')
+  @Get('export-pack')
+  exportPack() {
+    return this.admin.exportPack();
+  }
 }

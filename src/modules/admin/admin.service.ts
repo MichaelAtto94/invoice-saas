@@ -144,4 +144,100 @@ export class AdminService {
       paymentChannels,
     };
   }
+
+  async exportPack() {
+    const tenantId = this.requireTenantId();
+
+    const [
+      tenant,
+      clients,
+      items,
+      quotes,
+      invoices,
+      receipts,
+      recurringInvoices,
+    ] = await Promise.all([
+      this.prisma.tenant.findFirst({
+        where: { id: tenantId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          currencyCode: true,
+          address: true,
+          phone: true,
+          email: true,
+          logoUrl: true,
+          createdAt: true,
+        },
+      }),
+
+      this.prisma.client.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      this.prisma.item.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      this.prisma.quote.findMany({
+        where: { tenantId },
+        include: {
+          lines: true,
+          client: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      this.prisma.invoice.findMany({
+        where: { tenantId },
+        include: {
+          lines: true,
+          client: true,
+          receipts: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      this.prisma.receipt.findMany({
+        where: { tenantId },
+        include: {
+          invoice: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      this.prisma.recurringInvoice.findMany({
+        where: { tenantId },
+        include: {
+          lines: true,
+          client: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      exportedAt: new Date().toISOString(),
+      tenant,
+      counts: {
+        clients: clients.length,
+        items: items.length,
+        quotes: quotes.length,
+        invoices: invoices.length,
+        receipts: receipts.length,
+        recurringInvoices: recurringInvoices.length,
+      },
+      data: {
+        clients,
+        items,
+        quotes,
+        invoices,
+        receipts,
+        recurringInvoices,
+      },
+    };
+  }
 }
