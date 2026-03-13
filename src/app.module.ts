@@ -26,6 +26,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { SearchModule } from './modules/search/search.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { ClientPortalModule } from './modules/client-portal/client-portal.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     SearchModule,
     NotificationsModule,
     UploadsModule,
+    ClientPortalModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

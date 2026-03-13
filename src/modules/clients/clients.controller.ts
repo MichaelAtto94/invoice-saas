@@ -64,6 +64,12 @@ export class ClientsController {
     return this.clients.dashboard(id);
   }
 
+  @Roles('OWNER', 'ADMIN')
+  @Post(':id/regenerate-portal-token')
+  regeneratePortalToken(@Param('id') id: string) {
+    return this.clients.regeneratePortalToken(id);
+  }
+
   @Roles('OWNER', 'ADMIN', 'STAFF')
   @Get(':id/statement/pdf')
   async statementPdf(

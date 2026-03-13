@@ -95,6 +95,8 @@ model Client {
   address   String?
   createdAt DateTime @default(now())
 
+  portalToken String? @unique
+
   paymentAttempts PaymentAttempt[]
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id])

@@ -19,6 +19,10 @@ function generatePublicId() {
   return 'inv_' + randomBytes(5).toString('hex');
 }
 
+function generatePortalToken() {
+  return 'cpt_' + randomBytes(8).toString('hex');
+}
+
 @Injectable()
 export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -45,6 +49,7 @@ export class ClientsService {
         email: dto.email?.trim() || null,
         phone: dto.phone?.trim() || null,
         address: dto.address?.trim() || null,
+        portalToken: generatePortalToken(),
       },
       select: {
         id: true,
@@ -451,5 +456,30 @@ export class ClientsService {
       receipts,
       overdueInvoices,
     };
+  }
+
+  async regeneratePortalToken(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const client = await this.prisma.client.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+
+    if (!client) throw new NotFoundException('Client not found');
+
+    return this.prisma.client.update({
+      where: { id },
+      data: {
+        portalToken: generatePortalToken(),
+      },
+      select: {
+        id: true,
+        name: true,
+        portalToken: true,
+      },
+    });
   }
 }
