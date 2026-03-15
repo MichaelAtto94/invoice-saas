@@ -29,6 +29,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { ClientPortalModule } from './modules/client-portal/client-portal.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AdminModule } from './modules/admin/admin.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -62,6 +63,8 @@ import { AdminModule } from './modules/admin/admin.module';
     UploadsModule,
     ClientPortalModule,
     AdminModule,
+    HealthModule,
+    
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
