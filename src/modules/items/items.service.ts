@@ -22,7 +22,6 @@ export class ItemsService {
 
   async create(dto: CreateItemDto) {
     const tenantId = this.requireTenantId();
-    
 
     if (!dto.name?.trim())
       throw new BadRequestException('Item name is required');
@@ -52,7 +51,6 @@ export class ItemsService {
         unitPrice: true,
         createdAt: true,
         costPrice: true, // ✅ add
-
       },
     });
   }
@@ -133,5 +131,83 @@ export class ItemsService {
 
     await this.prisma.item.delete({ where: { id } });
     return { ok: true };
+  }
+
+  async archive(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const item = await this.prisma.item.findFirst({
+      where: { id, tenantId, isArchived: false },
+      select: { id: true, name: true },
+    });
+
+    if (!item) throw new NotFoundException('Item not found');
+
+    return this.prisma.item.update({
+      where: { id },
+      data: {
+        isArchived: true,
+        archivedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        isArchived: true,
+        archivedAt: true,
+      },
+    });
+  }
+
+  async restore(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const item = await this.prisma.item.findFirst({
+      where: { id, tenantId, isArchived: true },
+      select: { id: true, name: true },
+    });
+
+    if (!item) throw new NotFoundException('Archived item not found');
+
+    return this.prisma.item.update({
+      where: { id },
+      data: {
+        isArchived: false,
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        isArchived: true,
+        archivedAt: true,
+      },
+    });
+  }
+
+  async findArchived() {
+    const tenantId = this.requireTenantId();
+
+    return this.prisma.item.findMany({
+      where: {
+        tenantId,
+        isArchived: true,
+      },
+      orderBy: {
+        archivedAt: 'desc',
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        unitPrice: true,
+        costPrice: true,
+        isArchived: true,
+        archivedAt: true,
+        createdAt: true,
+      },
+    });
   }
 }

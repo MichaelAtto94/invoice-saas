@@ -4,18 +4,13 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { buildClientStatementPdf } from '../../common/pdf/client-statement-pdf';
+import { getRequestContext } from '../../common/context/request-context';
 import { PrismaService } from '../../database/prisma.service';
+import { ClientStatementDto } from './dto/client-statement.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
-import { getRequestContext } from '../../common/context/request-context';
-import { ClientStatementDto } from './dto/client-statement.dto';
-import { randomBytes } from 'crypto';
-
-
-function generatePublicId() {
-  return 'inv_' + randomBytes(5).toString('hex');
-}
 
 function generatePortalToken() {
   return 'cpt_' + randomBytes(8).toString('hex');
@@ -26,8 +21,7 @@ export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private requireTenantId(): string {
-    const ctx = getRequestContext();
-    const tenantId = ctx?.tenantId;
+    const tenantId = getRequestContext()?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Missing tenant context');
     return tenantId;
   }
@@ -39,7 +33,6 @@ export class ClientsService {
       throw new BadRequestException('Client name is required');
     }
 
-    // Use tenantId directly (UncheckedCreateInput), do NOT take it from user input
     return this.prisma.client.create({
       data: {
         tenantId,
@@ -55,14 +48,20 @@ export class ClientsService {
         email: true,
         phone: true,
         address: true,
+        portalToken: true,
         createdAt: true,
       },
     });
   }
 
   async findAll() {
-    // tenant scoping also exists, but we can keep it simple:
+    const tenantId = this.requireTenantId();
+
     return this.prisma.client.findMany({
+      where: {
+        tenantId,
+        isArchived: false,
+      },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -70,23 +69,30 @@ export class ClientsService {
         email: true,
         phone: true,
         address: true,
-        createdAt: true,
         portalToken: true,
+        createdAt: true,
       },
     });
   }
 
   async findOne(id: string) {
+    const tenantId = this.requireTenantId();
+
     if (!id) throw new BadRequestException('id is required');
 
     const client = await this.prisma.client.findFirst({
-      where: { id },
+      where: {
+        id,
+        tenantId,
+        isArchived: false,
+      },
       select: {
         id: true,
         name: true,
         email: true,
         phone: true,
         address: true,
+        portalToken: true,
         createdAt: true,
       },
     });
@@ -96,21 +102,28 @@ export class ClientsService {
   }
 
   async update(id: string, dto: UpdateClientDto) {
+    const tenantId = this.requireTenantId();
+
     if (!id) throw new BadRequestException('id is required');
 
     const exists = await this.prisma.client.findFirst({
-      where: { id },
+      where: {
+        id,
+        tenantId,
+        isArchived: false,
+      },
       select: { id: true },
     });
+
     if (!exists) throw new NotFoundException('Client not found');
 
     return this.prisma.client.update({
       where: { id },
       data: {
-        name: dto.name?.trim(),
-        email: dto.email?.trim(),
-        phone: dto.phone?.trim(),
-        address: dto.address?.trim(),
+        name: dto.name?.trim() || undefined,
+        email: dto.email?.trim() || undefined,
+        phone: dto.phone?.trim() || undefined,
+        address: dto.address?.trim() || undefined,
       },
       select: {
         id: true,
@@ -118,66 +131,104 @@ export class ClientsService {
         email: true,
         phone: true,
         address: true,
+        portalToken: true,
         createdAt: true,
       },
     });
   }
 
   async remove(id: string) {
-    if (!id) throw new BadRequestException('id is required');
-
-    const exists = await this.prisma.client.findFirst({
-      where: { id },
-      select: { id: true },
-    });
-    if (!exists) throw new NotFoundException('Client not found');
-
-    await this.prisma.client.delete({ where: { id } });
-    return { ok: true };
+    return this.archive(id);
   }
 
-
-  async statementPdf(id: string, query: ClientStatementDto) {
+  async archive(id: string) {
     const tenantId = this.requireTenantId();
 
-    const [data, tenant] = await Promise.all([
-      this.statement(id, query),
-      this.prisma.tenant.findFirst({
-        where: { id: tenantId },
-        select: {
-          name: true,
-          currencyCode: true,
-          address: true,
-          phone: true,
-          email: true,
-          logoUrl: true,
-        },
-      }),
-    ]);
+    if (!id) throw new BadRequestException('id is required');
 
-    const buffer = await buildClientStatementPdf({
-      company: {
-        name: tenant?.name ?? 'Cloud Motion Ltd',
-        address: tenant?.address,
-        phone: tenant?.phone,
-        email: tenant?.email,
-        logoUrl: tenant?.logoUrl,
+    const client = await this.prisma.client.findFirst({
+      where: {
+        id,
+        tenantId,
+        isArchived: false,
       },
-      client: data.client,
-      period: data.period,
-      summary: data.summary,
-      invoices: data.invoices,
-      receipts: data.receipts,
-      currencyCode: tenant?.currencyCode ?? 'ZMW',
+      select: { id: true, name: true },
     });
 
-    const fromPart = query.from ?? 'all';
-    const toPart = query.to ?? 'now';
+    if (!client) throw new NotFoundException('Client not found');
 
-    return {
-      filename: `statement-${id}-${fromPart}-${toPart}.pdf`,
-      buffer,
-    };
+    return this.prisma.client.update({
+      where: { id },
+      data: {
+        isArchived: true,
+        archivedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        isArchived: true,
+        archivedAt: true,
+      },
+    });
+  }
+
+  async restore(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const client = await this.prisma.client.findFirst({
+      where: {
+        id,
+        tenantId,
+        isArchived: true,
+      },
+      select: { id: true, name: true },
+    });
+
+    if (!client) throw new NotFoundException('Archived client not found');
+
+    return this.prisma.client.update({
+      where: { id },
+      data: {
+        isArchived: false,
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        isArchived: true,
+        archivedAt: true,
+      },
+    });
+  }
+
+  async regeneratePortalToken(id: string) {
+    const tenantId = this.requireTenantId();
+
+    if (!id) throw new BadRequestException('id is required');
+
+    const client = await this.prisma.client.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
+      select: { id: true, name: true },
+    });
+
+    if (!client) throw new NotFoundException('Client not found');
+
+    return this.prisma.client.update({
+      where: { id },
+      data: {
+        portalToken: generatePortalToken(),
+      },
+      select: {
+        id: true,
+        name: true,
+        portalToken: true,
+      },
+    });
   }
 
   async statement(id: string, query: ClientStatementDto) {
@@ -186,7 +237,11 @@ export class ClientsService {
     if (!id) throw new BadRequestException('id is required');
 
     const client = await this.prisma.client.findFirst({
-      where: { id, tenantId },
+      where: {
+        id,
+        tenantId,
+        isArchived: false,
+      },
       select: {
         id: true,
         name: true,
@@ -210,7 +265,6 @@ export class ClientsService {
       throw new BadRequestException('Invalid to date');
     }
 
-    // Opening balance = invoices before fromDate - receipts before fromDate
     let openingBalance = 0;
 
     if (fromDate) {
@@ -304,7 +358,9 @@ export class ClientsService {
       (sum, inv) => sum + (inv.baseTotal ?? 0),
       0,
     );
+
     const receiptTotal = receipts.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+
     const closingBalance = openingBalance + invoiceTotal - receiptTotal;
 
     return {
@@ -321,9 +377,51 @@ export class ClientsService {
       },
       invoices,
       receipts,
+      ledger: this.buildLedger(invoices, receipts, openingBalance),
     };
+  }
 
-    const ledger = this.buildLedger(invoices, receipts, openingBalance);
+  async statementPdf(id: string, query: ClientStatementDto) {
+    const tenantId = this.requireTenantId();
+
+    const [data, tenant] = await Promise.all([
+      this.statement(id, query),
+      this.prisma.tenant.findFirst({
+        where: { id: tenantId },
+        select: {
+          name: true,
+          currencyCode: true,
+          address: true,
+          phone: true,
+          email: true,
+          logoUrl: true,
+        },
+      }),
+    ]);
+
+    const buffer = await buildClientStatementPdf({
+      company: {
+        name: tenant?.name ?? 'Cloud Motion Ltd',
+        address: tenant?.address ?? null,
+        phone: tenant?.phone ?? null,
+        email: tenant?.email ?? null,
+        logoUrl: tenant?.logoUrl ?? null,
+      },
+      client: data.client,
+      period: data.period,
+      summary: data.summary,
+      invoices: data.invoices,
+      receipts: data.receipts,
+      currencyCode: tenant?.currencyCode ?? 'ZMW',
+    });
+
+    const fromPart = query.from ?? 'all';
+    const toPart = query.to ?? 'now';
+
+    return {
+      filename: `statement-${id}-${fromPart}-${toPart}.pdf`,
+      buffer,
+    };
   }
 
   private buildLedger(
@@ -374,7 +472,11 @@ export class ClientsService {
     if (!id) throw new BadRequestException('id is required');
 
     const client = await this.prisma.client.findFirst({
-      where: { id, tenantId },
+      where: {
+        id,
+        tenantId,
+        isArchived: false,
+      },
       select: {
         id: true,
         name: true,
@@ -388,7 +490,10 @@ export class ClientsService {
     if (!client) throw new NotFoundException('Client not found');
 
     const invoices = await this.prisma.invoice.findMany({
-      where: { tenantId, clientId: id },
+      where: {
+        tenantId,
+        clientId: id,
+      },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -431,6 +536,7 @@ export class ClientsService {
       (sum, inv) => sum + (inv.total ?? 0),
       0,
     );
+
     const totalPaid = receipts.reduce((sum, r) => sum + (r.amount ?? 0), 0);
     const outstanding = Math.max(0, totalInvoiced - totalPaid);
 
@@ -458,27 +564,27 @@ export class ClientsService {
     };
   }
 
-  async regeneratePortalToken(id: string) {
+  async findArchived() {
     const tenantId = this.requireTenantId();
 
-    if (!id) throw new BadRequestException('id is required');
-
-    const client = await this.prisma.client.findFirst({
-      where: { id, tenantId },
-      select: { id: true },
-    });
-
-    if (!client) throw new NotFoundException('Client not found');
-
-    return this.prisma.client.update({
-      where: { id },
-      data: {
-        portalToken: generatePortalToken(),
+    return this.prisma.client.findMany({
+      where: {
+        tenantId,
+        isArchived: true,
+      },
+      orderBy: {
+        archivedAt: 'desc',
       },
       select: {
         id: true,
         name: true,
+        email: true,
+        phone: true,
+        address: true,
         portalToken: true,
+        isArchived: true,
+        archivedAt: true,
+        createdAt: true,
       },
     });
   }

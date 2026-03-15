@@ -30,6 +30,11 @@ export class RecurringInvoicesController {
     return this.service.list();
   }
 
+  @Get('archived')
+  findArchived() {
+    return this.service.findArchived();
+  }
+
   @Get(':id')
   getById(@Param('id') id: string) {
     return this.service.getById(id);

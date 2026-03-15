@@ -97,6 +97,9 @@ model Client {
 
   portalToken String? @unique
 
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
+
   paymentAttempts PaymentAttempt[]
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id])
@@ -117,6 +120,9 @@ model Item {
   costPrice   Int      @default(0) // cents (your buying cost)
   isService   Boolean  @default(true)
   createdAt   DateTime @default(now())
+
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   quoteLines   QuoteLine[]
@@ -142,6 +148,9 @@ model RecurringInvoiceLine {
 
   recurringInvoiceId String
   itemId             String?
+
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
 
   name        String
   description String?
@@ -394,6 +403,9 @@ model RecurringInvoice {
   issueDays Int @default(0)
   dueDays   Int @default(7)
 
+  isArchived Boolean   @default(false)
+  archivedAt DateTime?
+
   subtotal Int
   taxTotal Int
   total    Int
@@ -475,17 +487,17 @@ model AuditLog {
 }
 
 model Notification {
-  id          String   @id @default(uuid())
-  tenantId    String
-  userId      String?
-  type        String
-  title       String
-  message     String?
-  entityType  String?
-  entityId    String?
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  readAt      DateTime?
+  id         String    @id @default(uuid())
+  tenantId   String
+  userId     String?
+  type       String
+  title      String
+  message    String?
+  entityType String?
+  entityId   String?
+  isRead     Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  readAt     DateTime?
 
   @@index([tenantId])
   @@index([userId])

@@ -29,6 +29,12 @@ export class ItemsController {
   }
 
   @Roles('OWNER', 'ADMIN', 'STAFF')
+  @Get('archived')
+  findArchived() {
+    return this.items.findArchived();
+  }
+
+  @Roles('OWNER', 'ADMIN', 'STAFF')
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.items.findOne(id);
@@ -44,5 +50,17 @@ export class ItemsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.items.remove(id);
+  }
+
+  @Roles('OWNER', 'ADMIN')
+  @Post(':id/archive')
+  archive(@Param('id') id: string) {
+    return this.items.archive(id);
+  }
+
+  @Roles('OWNER', 'ADMIN')
+  @Post(':id/restore')
+  restore(@Param('id') id: string) {
+    return this.items.restore(id);
   }
 }

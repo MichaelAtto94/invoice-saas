@@ -85,6 +85,7 @@ export class RecurringInvoicesService {
       where: {
         tenantId,
         active: true,
+        isArchived: false,
         nextRunDate: { lte: today },
       },
       include: { lines: true },
@@ -195,7 +196,9 @@ export class RecurringInvoicesService {
 
     const templates = await this.prisma.recurringInvoice.findMany({
       where: {
+        tenantId: this.requireTenantId(),
         active: true,
+        isArchived: false,
         nextRunDate: { lte: today },
       },
       include: { lines: true },
@@ -303,7 +306,7 @@ export class RecurringInvoicesService {
     const tenantId = this.requireTenantId();
 
     return this.prisma.recurringInvoice.findMany({
-      where: { tenantId },
+      where: { tenantId, isArchived: false },
       orderBy: { createdAt: 'desc' },
       include: {
         client: {
@@ -325,7 +328,7 @@ export class RecurringInvoicesService {
     if (!id) throw new BadRequestException('id is required');
 
     const recurring = await this.prisma.recurringInvoice.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId, isArchived: false },
       include: {
         client: {
           select: {
@@ -428,22 +431,46 @@ export class RecurringInvoicesService {
     if (!id) throw new BadRequestException('id is required');
 
     const existing = await this.prisma.recurringInvoice.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId, isArchived: false },
       select: { id: true },
     });
 
     if (!existing) throw new BadRequestException('Recurring invoice not found');
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.recurringInvoiceLine.deleteMany({
-        where: { recurringInvoiceId: id },
-      });
-
-      await tx.recurringInvoice.delete({
-        where: { id },
-      });
+    await this.prisma.recurringInvoice.update({
+      where: { id },
+      data: {
+        isArchived: true,
+        archivedAt: new Date(),
+        active: false,
+      },
     });
 
-    return { ok: true };
+    return { ok: true, archived: true };
+  }
+
+  async findArchived() {
+    const tenantId = this.requireTenantId();
+
+    return this.prisma.recurringInvoice.findMany({
+      where: {
+        tenantId,
+        isArchived: true,
+      },
+      orderBy: {
+        archivedAt: 'desc',
+      },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        lines: true,
+      },
+    });
   }
 }
