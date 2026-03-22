@@ -7,24 +7,52 @@ datasource db {
 }
 
 model Tenant {
-  id           String       @id @default(uuid())
-  name         String
-  slug         String       @unique
-  currencyCode CurrencyCode @default(ZMW)
-  createdAt    DateTime     @default(now())
+  id                  String       @id @default(uuid())
+  name                String
+  slug                String       @unique
+  currencyCode        CurrencyCode @default(ZMW)
+  createdAt           DateTime     @default(now())
 
-  address String?
-  phone   String?
-  email   String?
-  logoUrl String?
+  address             String?
+  phone               String?
+  email               String?
+  logoUrl             String?
 
-  receipts Receipt[]
+  bankName            String?
+  accountName         String?
+  accountNumber       String?
+  branchName          String?
+  airtelMoneyNumber   String?
+  mtnMoneyNumber      String?
+  paymentDisplayName  String?
 
-  roles     Role[]
-  members   TenantUser[]
-  clients   Client[]
-  items     Item[]
-  sequences DocumentSequence?
+  planCode            String       @default("FREE")
+  subscriptionStatus  String       @default("ACTIVE")
+  planStartedAt       DateTime?
+  planExpiresAt       DateTime?
+
+  roles             Role[]
+  members           TenantUser[]
+  clients           Client[]
+  items             Item[]
+  sequences         DocumentSequence?
+  receipts          Receipt[]
+  reminderLogs      ReminderLog[]
+  refreshTokens     RefreshToken[]
+  quotes            Quote[]
+  quoteLines        QuoteLine[]
+  invoiceActivities InvoiceActivity[]
+  invoices          Invoice[]
+  invoiceLines      InvoiceLine[]
+  invoiceViews      InvoiceView[]
+  recurringInvoices RecurringInvoice[]
+  exchangeRates     ExchangeRate[]
+  paymentAttempts   PaymentAttempt[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  attachments       InvoiceAttachment[]
+
+  subscriptionUpgradeRequests SubscriptionUpgradeRequest[]
 }
 
 model ReminderLog {
@@ -37,6 +65,7 @@ model ReminderLog {
   subject      String
   sentAt       DateTime @default(now())
 
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
   invoice Invoice @relation(fields: [invoiceId], references: [id])
   client  Client  @relation(fields: [clientId], references: [id])
 
@@ -100,9 +129,8 @@ model Client {
   isArchived Boolean   @default(false)
   archivedAt DateTime?
 
-  paymentAttempts PaymentAttempt[]
-
   tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  paymentAttempts   PaymentAttempt[]
   quotes            Quote[]
   invoices          Invoice[]
   recurringInvoices RecurringInvoice[]
@@ -117,7 +145,7 @@ model Item {
   name        String
   description String?
   unitPrice   Int      @default(0)
-  costPrice   Int      @default(0) // cents (your buying cost)
+  costPrice   Int      @default(0)
   isService   Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -137,6 +165,8 @@ model InvoiceView {
   invoiceId String
   publicId  String
   viewedAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([invoiceId])
   @@index([publicId])
@@ -188,7 +218,8 @@ model RefreshToken {
   createdAt DateTime  @default(now())
   expiresAt DateTime
 
-  user User @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([userId])
   @@index([tenantId])
@@ -213,12 +244,13 @@ model Quote {
   total    Int @default(0)
 
   currency     CurrencyCode @default(ZMW)
-  fxRateToBase Int          @default(1000000) // 1,000,000 = 1.000000 (6dp)
-  baseTotal    Int          @default(0) // total converted to tenant base
+  fxRateToBase Int          @default(1000000)
+  baseTotal    Int          @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tenant  Tenant      @relation(fields: [tenantId], references: [id])
   client  Client      @relation(fields: [clientId], references: [id])
   lines   QuoteLine[]
   invoice Invoice?
@@ -237,13 +269,14 @@ model QuoteLine {
   description String?
   quantity    Int     @default(1)
   unitPrice   Int     @default(0)
-  costPrice   Int     @default(0) // cents snapshot
+  costPrice   Int     @default(0)
   lineTotal   Int     @default(0)
 
   createdAt DateTime @default(now())
 
-  quote Quote @relation(fields: [quoteId], references: [id])
-  item  Item? @relation(fields: [itemId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  quote  Quote  @relation(fields: [quoteId], references: [id])
+  item   Item?  @relation(fields: [itemId], references: [id])
 
   @@index([tenantId, quoteId])
 }
@@ -256,6 +289,8 @@ model InvoiceActivity {
   description String?
   createdAt   DateTime @default(now())
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([invoiceId])
 }
 
@@ -267,16 +302,13 @@ model Invoice {
   quoteId  String? @unique
   publicId String? @unique
 
-  paymentAttempts PaymentAttempt[]
-  reminderLogs    ReminderLog[]
-
-  status    String    @default("DRAFT") // DRAFT | SENT | PARTIAL | PAID | VOID
+  status    String    @default("DRAFT")
   issueDate DateTime  @default(now())
   dueDate   DateTime?
   notes     String?
 
   currency     CurrencyCode @default(ZMW)
-  fxRateToBase Int          @default(1000000) // 6dp fixed-point
+  fxRateToBase Int          @default(1000000)
   baseTotal    Int          @default(0)
 
   subtotal   Int @default(0)
@@ -284,22 +316,21 @@ model Invoice {
   total      Int @default(0)
   amountPaid Int @default(0)
 
-  currencyCode CurrencyCode @default(ZMW)
-
-  // FX snapshot (only used when invoice currency != tenant currency)
-  // Stored as fixed-point int with 6 decimals.
-  // Example: 27.345600 => 27345600
-  fxRate Int?
-  fxFrom CurrencyCode?
+  currencyCode CurrencyCode  @default(ZMW)
+  fxRate       Int?
+  fxFrom       CurrencyCode?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  receipts Receipt[]
-
-  client Client        @relation(fields: [clientId], references: [id])
-  quote  Quote?        @relation(fields: [quoteId], references: [id])
-  lines  InvoiceLine[]
+  tenant          Tenant              @relation(fields: [tenantId], references: [id])
+  client          Client              @relation(fields: [clientId], references: [id])
+  quote           Quote?              @relation(fields: [quoteId], references: [id])
+  lines           InvoiceLine[]
+  receipts        Receipt[]
+  reminderLogs    ReminderLog[]
+  paymentAttempts PaymentAttempt[]
+  attachments     InvoiceAttachment[]
 
   @@unique([tenantId, number])
   @@index([tenantId, clientId])
@@ -315,11 +346,12 @@ model InvoiceLine {
   description String?
   quantity    Int     @default(1)
   unitPrice   Int     @default(0)
-  costPrice   Int     @default(0) // cents snapshot
+  costPrice   Int     @default(0)
   lineTotal   Int     @default(0)
 
   createdAt DateTime @default(now())
 
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
   invoice Invoice @relation(fields: [invoiceId], references: [id])
   item    Item?   @relation(fields: [itemId], references: [id])
 
@@ -333,14 +365,14 @@ model Receipt {
   invoiceId String
 
   amount    Int
-  method    String? // CASH | MOBILE_MONEY | BANK | CARD etc
-  reference String? // tx ref
+  method    String?
+  reference String?
   notes     String?
 
   createdAt DateTime @default(now())
 
-  invoice         Invoice          @relation(fields: [invoiceId], references: [id])
   tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id])
   paymentAttempts PaymentAttempt[]
 
   @@unique([tenantId, number])
@@ -415,6 +447,7 @@ model RecurringInvoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
   client Client @relation(fields: [clientId], references: [id])
 
   lines RecurringInvoiceLine[]
@@ -428,10 +461,12 @@ model ExchangeRate {
   tenantId String
   from     CurrencyCode
   to       CurrencyCode
-  rate     Int // 6dp fixed-point (e.g. 27.345600 => 27345600)
+  rate     Int
   asOfDate DateTime     @default(now())
 
   createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
 }
@@ -459,10 +494,10 @@ model PaymentAttempt {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
   receipt Receipt? @relation(fields: [createdReceiptId], references: [id])
-
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
-  client  Client  @relation(fields: [clientId], references: [id])
+  invoice Invoice  @relation(fields: [invoiceId], references: [id])
+  client  Client   @relation(fields: [clientId], references: [id])
 
   @@index([tenantId])
   @@index([invoiceId])
@@ -480,6 +515,8 @@ model AuditLog {
   metadata    String?
 
   createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([entityType, entityId])
@@ -499,7 +536,53 @@ model Notification {
   createdAt  DateTime  @default(now())
   readAt     DateTime?
 
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([tenantId])
   @@index([userId])
   @@index([createdAt])
+}
+
+model InvoiceAttachment {
+  id           String   @id @default(uuid())
+  tenantId     String
+  invoiceId    String
+  filename     String
+  originalName String
+  mimetype     String
+  size         Int
+  path         String
+  createdAt    DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([tenantId])
+  @@index([invoiceId])
+}
+
+model SubscriptionUpgradeRequest {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  requestedPlanCode  String
+  currentPlanCode    String
+  status             String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  notes              String?
+  requestedAt        DateTime @default(now())
+  reviewedAt         DateTime?
+  reviewedByUserId   String?
+
+  paymentStatus      String   @default("PENDING") // PENDING | SUBMITTED | CONFIRMED | REJECTED
+  paymentMethod      String?
+  paymentReference   String?
+  paymentProofUrl    String?
+  paymentNotes       String?
+  paymentSubmittedAt DateTime?
+  paymentReviewedAt  DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([requestedAt])
 }

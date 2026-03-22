@@ -3,6 +3,11 @@ import { PrismaService } from '../../database/prisma.service';
 import { getRequestContext } from '../../common/context/request-context';
 import { BadRequestException } from '@nestjs/common';
 import { ImportPackDto } from './dto/import-pack.dto';
+import { NotFoundException } from '@nestjs/common';
+import { UpdateTenantSubscriptionDto } from './dto/update-tenant-subscription.dto';
+import { ReviewUpgradeRequestDto } from './dto/review-upgrade-request.dto';
+import { ReviewUpgradePaymentDto } from './dto/review-upgrade-payment.dto';
+
 
 @Injectable()
 export class AdminService {
@@ -526,5 +531,251 @@ export class AdminService {
         recurringInvoices: importedRecurring,
       },
     };
+  }
+
+  async updateTenantSubscription(
+    tenantId: string,
+    dto: UpdateTenantSubscriptionDto,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId is required');
+    }
+
+    const exists = await this.prisma.tenant.findFirst({
+      where: { id: tenantId },
+      select: { id: true, name: true },
+    });
+
+    if (!exists) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    const planStartedAt = dto.planStartedAt
+      ? new Date(dto.planStartedAt)
+      : undefined;
+
+    const planExpiresAt = dto.planExpiresAt
+      ? new Date(dto.planExpiresAt)
+      : undefined;
+
+    if (dto.planStartedAt && Number.isNaN(planStartedAt?.getTime())) {
+      throw new BadRequestException('Invalid planStartedAt');
+    }
+
+    if (dto.planExpiresAt && Number.isNaN(planExpiresAt?.getTime())) {
+      throw new BadRequestException('Invalid planExpiresAt');
+    }
+
+    return this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        planCode: dto.planCode ?? undefined,
+        subscriptionStatus: dto.subscriptionStatus ?? undefined,
+        planStartedAt,
+        planExpiresAt,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        planCode: true,
+        subscriptionStatus: true,
+        planStartedAt: true,
+        planExpiresAt: true,
+      },
+    });
+  }
+
+  async listUpgradeRequests() {
+    return this.prisma.subscriptionUpgradeRequest.findMany({
+      orderBy: { requestedAt: 'desc' },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            planCode: true,
+            subscriptionStatus: true,
+          },
+        },
+      },
+      take: 100,
+    });
+  }
+
+  async reviewUpgradeRequest(requestId: string, dto: ReviewUpgradeRequestDto) {
+    if (!requestId) {
+      throw new BadRequestException('requestId is required');
+    }
+
+    const request = await this.prisma.subscriptionUpgradeRequest.findFirst({
+      where: { id: requestId },
+      select: {
+        id: true,
+        tenantId: true,
+        requestedPlanCode: true,
+        currentPlanCode: true,
+        status: true,
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Upgrade request not found');
+    }
+
+    if (request.status !== 'PENDING') {
+      throw new BadRequestException('Upgrade request already reviewed');
+    }
+
+    const reviewerId = getRequestContext()?.userId ?? null;
+
+    const planStartedAt = dto.planStartedAt
+      ? new Date(dto.planStartedAt)
+      : new Date();
+
+    const planExpiresAt = dto.planExpiresAt
+      ? new Date(dto.planExpiresAt)
+      : undefined;
+
+    if (dto.planStartedAt && Number.isNaN(planStartedAt.getTime())) {
+      throw new BadRequestException('Invalid planStartedAt');
+    }
+
+    if (dto.planExpiresAt && Number.isNaN(planExpiresAt?.getTime())) {
+      throw new BadRequestException('Invalid planExpiresAt');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const reviewedRequest = await tx.subscriptionUpgradeRequest.update({
+        where: { id: requestId },
+        data: {
+          status: dto.status,
+          notes: dto.notes?.trim() || undefined,
+          reviewedAt: new Date(),
+          reviewedByUserId: reviewerId,
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          currentPlanCode: true,
+          requestedPlanCode: true,
+          status: true,
+          notes: true,
+          requestedAt: true,
+          reviewedAt: true,
+          reviewedByUserId: true,
+        },
+      });
+
+      if (dto.status === 'APPROVED') {
+        await tx.tenant.update({
+          where: { id: request.tenantId },
+          data: {
+            planCode: request.requestedPlanCode,
+            subscriptionStatus: 'ACTIVE',
+            planStartedAt,
+            planExpiresAt,
+          },
+        });
+      }
+
+      return reviewedRequest;
+    });
+  }
+
+  async reviewUpgradePayment(requestId: string, dto: ReviewUpgradePaymentDto) {
+    if (!requestId) {
+      throw new BadRequestException('requestId is required');
+    }
+
+    const request = await this.prisma.subscriptionUpgradeRequest.findFirst({
+      where: { id: requestId },
+      select: {
+        id: true,
+        tenantId: true,
+        requestedPlanCode: true,
+        currentPlanCode: true,
+        status: true,
+        paymentStatus: true,
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Upgrade request not found');
+    }
+
+    if (request.status !== 'PENDING') {
+      throw new BadRequestException('Upgrade request already reviewed');
+    }
+
+    if (request.paymentStatus !== 'SUBMITTED') {
+      throw new BadRequestException('No submitted payment to review');
+    }
+
+    const reviewerId = getRequestContext()?.userId ?? null;
+
+    const planStartedAt = dto.planStartedAt
+      ? new Date(dto.planStartedAt)
+      : new Date();
+
+    const planExpiresAt = dto.planExpiresAt
+      ? new Date(dto.planExpiresAt)
+      : undefined;
+
+    if (dto.planStartedAt && Number.isNaN(planStartedAt.getTime())) {
+      throw new BadRequestException('Invalid planStartedAt');
+    }
+
+    if (dto.planExpiresAt && Number.isNaN(planExpiresAt?.getTime())) {
+      throw new BadRequestException('Invalid planExpiresAt');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const paymentReviewed = await tx.subscriptionUpgradeRequest.update({
+        where: { id: requestId },
+        data: {
+          paymentStatus: dto.paymentStatus,
+          paymentNotes: dto.notes?.trim() || undefined,
+          paymentReviewedAt: new Date(),
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          currentPlanCode: true,
+          requestedPlanCode: true,
+          status: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          paymentReference: true,
+          paymentProofUrl: true,
+          paymentSubmittedAt: true,
+          paymentReviewedAt: true,
+        },
+      });
+
+      if (dto.paymentStatus === 'CONFIRMED') {
+        await tx.subscriptionUpgradeRequest.update({
+          where: { id: requestId },
+          data: {
+            status: 'APPROVED',
+            reviewedAt: new Date(),
+            reviewedByUserId: reviewerId,
+          },
+        });
+
+        await tx.tenant.update({
+          where: { id: request.tenantId },
+          data: {
+            planCode: request.requestedPlanCode,
+            subscriptionStatus: 'ACTIVE',
+            planStartedAt,
+            planExpiresAt,
+          },
+        });
+      }
+
+      return paymentReviewed;
+    });
   }
 }

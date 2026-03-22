@@ -10,6 +10,7 @@ import { CreateQuoteDto } from './dto/create-quote.dto';
 import { applyFx } from '../../common/money/fx';
 import { ConvertQuoteDto } from './dto/convert-quote';
 import { randomBytes } from 'crypto';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 
 function pad5(n: number) {
@@ -22,7 +23,10 @@ function generatePublicId() {
 
 @Injectable()
 export class QuotesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly subscriptions: SubscriptionsService,
+  ) {}
 
   // ✅ Ensure tenant exists in request context
   private requireTenantId(): string {
@@ -45,8 +49,12 @@ export class QuotesService {
     return { subtotal, taxTotal, total };
   }
 
+
+
   // ✅ CREATE QUOTE
   async create(dto: CreateQuoteDto) {
+
+      await this.subscriptions.assertCanCreateQuote();
     const tenantId = this.requireTenantId();
 
     if (!dto.clientId) throw new BadRequestException('clientId is required');

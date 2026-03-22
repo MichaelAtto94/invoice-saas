@@ -18,14 +18,15 @@ type TransactionResult = {
 };
 
 function parseExpiresToDate(value: string): Date {
-  // supports "7d", "15m", "3600s" (simple)
-  const match = /^(\d+)([smhd])$/.exec(value.trim());
+  const match = /^(\d+)([smhd])$/i.exec(value.trim());
+
   if (!match) {
-    // fallback: 7 days
     return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   }
+
   const n = Number(match[1]);
-  const unit = match[2];
+  const unit = match[2].toLowerCase();
+
   const ms =
     unit === 's'
       ? n * 1000
@@ -33,7 +34,8 @@ function parseExpiresToDate(value: string): Date {
         ? n * 60 * 1000
         : unit === 'h'
           ? n * 60 * 60 * 1000
-          : n * 24 * 60 * 60 * 1000; // 'd'
+          : n * 24 * 60 * 60 * 1000;
+
   return new Date(Date.now() + ms);
 }
 
@@ -63,23 +65,29 @@ export class AuthService {
       throw new BadRequestException('All fields are required');
     }
 
+    const normalizedEmail = ownerEmail.trim().toLowerCase();
+    const normalizedSlug = companySlug.trim().toLowerCase();
+
     const existingUser = await this.prisma.user.findUnique({
-      where: { email: ownerEmail },
+      where: { email: normalizedEmail },
     });
-    if (existingUser) throw new BadRequestException('Email already in use');
+    if (existingUser) {
+      throw new BadRequestException('Email already in use');
+    }
 
     const existingTenant = await this.prisma.tenant.findUnique({
-      where: { slug: companySlug },
+      where: { slug: normalizedSlug },
     });
-    if (existingTenant)
+    if (existingTenant) {
       throw new BadRequestException('Company slug already in use');
+    }
 
     const passwordHash = await bcrypt.hash(ownerPassword, 10);
 
     const result: TransactionResult = await this.prisma.$transaction(
       async (tx): Promise<TransactionResult> => {
         const tenant = await tx.tenant.create({
-          data: { name: companyName, slug: companySlug },
+          data: { name: companyName, slug: normalizedSlug },
           select: { id: true, name: true, slug: true },
         });
 
@@ -99,7 +107,7 @@ export class AuthService {
         const user = await tx.user.create({
           data: {
             fullName: ownerFullName,
-            email: ownerEmail,
+            email: normalizedEmail,
             passwordHash,
           },
           select: { id: true, fullName: true, email: true },
@@ -127,12 +135,12 @@ export class AuthService {
 
     const tokens = await this.issueTokens({
       userId: result.user.id,
+      email: result.user.email,
       tenantId: result.tenant.id,
       tenantSlug: result.tenant.slug,
       role: result.role.name,
     });
 
-    // store refresh token hash (rotation ready)
     await this.storeRefreshToken(
       result.user.id,
       result.tenant.id,
@@ -143,7 +151,9 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const { email, password, tenantSlug } = dto;
+    const email = dto.email?.trim().toLowerCase();
+    const password = dto.password;
+    const tenantSlug = dto.tenantSlug?.trim().toLowerCase();
 
     if (!email || !password || !tenantSlug) {
       throw new BadRequestException('email, password, tenantSlug are required');
@@ -155,12 +165,16 @@ export class AuthService {
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (!ok) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { slug: tenantSlug },
     });
-    if (!tenant) throw new UnauthorizedException('Invalid tenant');
+    if (!tenant) {
+      throw new UnauthorizedException('Invalid tenant');
+    }
 
     const membership = await this.prisma.tenantUser.findUnique({
       where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
@@ -173,6 +187,7 @@ export class AuthService {
 
     const tokens = await this.issueTokens({
       userId: user.id,
+      email: user.email,
       tenantId: tenant.id,
       tenantSlug: tenant.slug,
       role: membership.role.name,
@@ -187,13 +202,12 @@ export class AuthService {
     };
   }
 
-  // NEW: refresh endpoint logic
   async refresh(dto: RefreshDto) {
     const { refreshToken } = dto;
-    if (!refreshToken)
+    if (!refreshToken) {
       throw new BadRequestException('refreshToken is required');
+    }
 
-    // 1) Verify refresh token signature
     let payload: any;
     try {
       payload = await this.jwt.verifyAsync(refreshToken, {
@@ -206,45 +220,64 @@ export class AuthService {
     const userId: string = payload.sub;
     const tenantId: string = payload.tenantId;
 
-    // 2) Check it exists in DB and not revoked, and hash matches
     const tokenRows = await this.prisma.refreshToken.findMany({
       where: { userId, tenantId, revokedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 10,
+      select: {
+        id: true,
+        tokenHash: true,
+        expiresAt: true,
+      },
     });
 
     const match = await this.findMatchingStoredToken(refreshToken, tokenRows);
-    if (!match)
+    if (!match) {
       throw new UnauthorizedException('Refresh token revoked or not found');
+    }
 
-    // 3) Revoke the matched token (rotation)
     await this.prisma.refreshToken.update({
       where: { id: match.id },
       data: { revokedAt: new Date() },
     });
 
-    // 4) Load tenant + membership role to put into new access token
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('User no longer active');
+    }
+
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
     });
-    if (!tenant) throw new UnauthorizedException('Invalid tenant');
+    if (!tenant) {
+      throw new UnauthorizedException('Invalid tenant');
+    }
 
     const membership = await this.prisma.tenantUser.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
       include: { role: true },
     });
-    if (!membership)
-      throw new UnauthorizedException('User not a member of this tenant');
 
-    // 5) Issue new tokens
+    if (!membership) {
+      throw new UnauthorizedException('User not a member of this tenant');
+    }
+
     const tokens = await this.issueTokens({
       userId,
+      email: user.email,
       tenantId,
       tenantSlug: tenant.slug,
       role: membership.role.name,
     });
 
-    // 6) Store new refresh token
     await this.storeRefreshToken(userId, tenantId, tokens.refreshToken);
 
     return tokens;
@@ -273,22 +306,26 @@ export class AuthService {
     stored: { id: string; tokenHash: string; expiresAt: Date }[],
   ) {
     const now = new Date();
+
     for (const row of stored) {
       if (row.expiresAt < now) continue;
       const ok = await bcrypt.compare(refreshToken, row.tokenHash);
       if (ok) return row;
     }
+
     return null;
   }
 
   private async issueTokens(payload: {
     userId: string;
+    email: string;
     tenantId: string;
     tenantSlug: string;
     role: string;
   }) {
     const accessPayload = {
       sub: payload.userId,
+      email: payload.email,
       tenantId: payload.tenantId,
       tenantSlug: payload.tenantSlug,
       role: payload.role,

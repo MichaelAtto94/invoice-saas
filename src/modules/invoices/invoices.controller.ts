@@ -1,63 +1,72 @@
-import { Controller, Get, Param, Res, Post, StreamableFile } from '@nestjs/common';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { InvoicesService } from './invoices.service';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
+import { AuthGuard } from '@nestjs/passport';
+import { InvoicesService } from './invoices.service';
+import { InvoicePdfService } from './pdf/invoice-pdf.service';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { CurrentUserType } from '../../common/types/current-user.type';
 
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('invoices')
 export class InvoicesController {
-  constructor(private readonly invoices: InvoicesService) {}
+  constructor(
+    private readonly invoicesService: InvoicesService,
+    private readonly invoicePdfService: InvoicePdfService,
+  ) {}
 
-  @Roles('OWNER', 'ADMIN', 'STAFF')
   @Get()
-  list() {
-    return this.invoices.list();
+  @Roles('OWNER', 'ADMIN', 'STAFF')
+  findAll(@CurrentUser() user: CurrentUserType) {
+    return this.invoicesService.findAll(user.tenantId);
   }
 
-  @Roles('OWNER', 'ADMIN', 'STAFF')
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.invoices.getById(id);
+  @Roles('OWNER', 'ADMIN', 'STAFF')
+  findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
+    return this.invoicesService.findOne(id, user.tenantId);
   }
 
-  // ✅ PUT THIS HERE (PDF ROUTE)
+  @Post()
   @Roles('OWNER', 'ADMIN', 'STAFF')
+  create(@Body() dto: any, @CurrentUser() user: CurrentUserType) {
+    return this.invoicesService.create(dto, user);
+  }
+
+  @Patch(':id/send')
+  @Roles('OWNER', 'ADMIN')
+  send(@Param('id') id: string, @CurrentUser() user: CurrentUserType) {
+    return this.invoicesService.send(id, user);
+  }
+
   @Get(':id/pdf')
-  async pdf(@Param('id') id: string, @Res() res: Response) {
-    const { filename, buffer } = await this.invoices.buildInvoicePdf(id);
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
-
-    //console.log('PDF buffer length:', buffer.length);
-    //console.log('PDF first bytes:', buffer.subarray(0, 10).toString());
-
-    return res.end(buffer); // ✅ important
-  }
-
   @Roles('OWNER', 'ADMIN', 'STAFF')
-  @Post(':id/send')
-  send(@Param('id') id: string) {
-    return this.invoices.sendInvoice(id);
-  }
+  async downloadPdf(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserType,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.invoicePdfService.generateInvoicePdf(
+      id,
+      user.tenantId,
+    );
 
-  @Post(':id/email')
-  email(@Param('id') id: string) {
-    return this.invoices.emailInvoice(id);
-  }
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=invoice-${id}.pdf`,
+      'Content-Length': pdfBuffer.length,
+    });
 
-  @Get(':id/activity')
-  activity(@Param('id') id: string) {
-    return this.invoices.getInvoiceActivity(id);
-  }
-
-  @Get(':id/payments')
-  payments(@Param('id') id: string) {
-    return this.invoices.getInvoicePayments(id);
-  }
-
-  @Get(':id/summary')
-  summary(@Param('id') id: string) {
-    return this.invoices.getInvoiceSummary(id);
+    res.end(pdfBuffer);
   }
 }

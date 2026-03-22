@@ -327,9 +327,9 @@ export class PaymentsService {
     });
 
     await this.notifications.create({
-      type: 'PAYMENT_SUBMITTED',
-      title: 'Payment submitted',
-      message: `Payment proof submitted for attempt ${updated.id}`,
+      type: 'PAYMENT_REJECTED',
+      title: 'Payment rejected',
+      message: `Payment proof rejected for attempt ${updated.id}`,
       entityType: 'PaymentAttempt',
       entityId: updated.id,
     });

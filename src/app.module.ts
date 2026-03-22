@@ -13,7 +13,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RequestContextInterceptor } from './common/interceptors/request-context.interceptor';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
-import { MailerService } from './common/mailer/mailer.service';
+import { MailerModule } from './modules/mailer/mailer.module';
 import { ExportsModule } from './modules/exports/exports.module';
 import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module';
 import { RecurringInvoicesModule } from './modules/recurring-invoices/recurring-invoices.module';
@@ -30,6 +30,8 @@ import { ClientPortalModule } from './modules/client-portal/client-portal.module
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AdminModule } from './modules/admin/admin.module';
 import { HealthModule } from './modules/health/health.module';
+import { UsersModule } from './modules/users/users.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -41,6 +43,7 @@ import { HealthModule } from './modules/health/health.module';
         },
       ],
     }),
+    MailerModule,
     ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
@@ -64,6 +67,8 @@ import { HealthModule } from './modules/health/health.module';
     ClientPortalModule,
     AdminModule,
     HealthModule,
+    UsersModule,
+    SubscriptionsModule,
     
   ],
   providers: [
@@ -71,7 +76,6 @@ import { HealthModule } from './modules/health/health.module';
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    MailerService,
   ],
 })
 export class AppModule {}

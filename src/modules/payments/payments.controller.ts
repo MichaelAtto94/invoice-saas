@@ -5,22 +5,27 @@ import { StartPaymentDto } from './dto/start-payment.dto';
 import { SubmitPaymentProofDto } from './dto/submit-payment-proof.dto';
 import { ReviewPaymentDto } from './dto/review-payment.dto';
 import { Throttle } from '@nestjs/throttler';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller()
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Post('public/payments/start')
+  @Public()
+  @Post('public/payments/start')
   start(@Body() dto: StartPaymentDto) {
     return this.payments.startPublicPayment(dto);
   }
 
+  @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('public/payments/:id/submit-proof')
   submitProof(@Param('id') id: string, @Body() dto: SubmitPaymentProofDto) {
     return this.payments.submitProof(id, dto);
   }
 
+  @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Get('public/payments/:id')
   getPublicPayment(@Param('id') id: string) {

@@ -5,6 +5,7 @@ import { env } from '../../../config/env';
 
 type JwtPayload = {
   sub: string;
+  email: string;
   tenantId: string;
   tenantSlug: string;
   role: string;
@@ -15,12 +16,18 @@ export class AccessTokenStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor() {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: env.JWT_ACCESS_SECRET, // ✅ must be correct and non-empty
+      secretOrKey: env.JWT_ACCESS_SECRET,
       ignoreExpiration: false,
     });
   }
 
   async validate(payload: JwtPayload) {
-    return payload; // becomes req.user
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      tenantId: payload.tenantId,
+      tenantSlug: payload.tenantSlug,
+      role: payload.role,
+    };
   }
 }

@@ -1,27 +1,44 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AdminService } from './admin.service';
-import { ImportPackDto } from './dto/import-pack.dto';
+import { UpdateTenantSubscriptionDto } from './dto/update-tenant-subscription.dto';
+import { ReviewUpgradeRequestDto } from './dto/review-upgrade-request.dto';
+import { ReviewUpgradePaymentDto } from './dto/review-upgrade-payment.dto';
 
 @Controller('admin')
 export class AdminController {
   constructor(private readonly admin: AdminService) {}
 
-  @Roles('OWNER', 'ADMIN')
-  @Get('analytics')
-  analytics() {
-    return this.admin.analytics();
+  @Roles('OWNER')
+  @Patch('tenants/:tenantId/subscription')
+  updateTenantSubscription(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: UpdateTenantSubscriptionDto,
+  ) {
+    return this.admin.updateTenantSubscription(tenantId, dto);
   }
 
-  @Roles('OWNER', 'ADMIN')
-  @Get('export-pack')
-  exportPack() {
-    return this.admin.exportPack();
+  @Roles('OWNER')
+  @Get('upgrade-requests')
+  listUpgradeRequests() {
+    return this.admin.listUpgradeRequests();
   }
 
-  @Roles('OWNER', 'ADMIN')
-  @Post('import-pack')
-  importPack(@Body() dto: ImportPackDto) {
-    return this.admin.importPack(dto);
+  @Roles('OWNER')
+  @Patch('upgrade-requests/:requestId/review')
+  reviewUpgradeRequest(
+    @Param('requestId') requestId: string,
+    @Body() dto: ReviewUpgradeRequestDto,
+  ) {
+    return this.admin.reviewUpgradeRequest(requestId, dto);
+  }
+
+  @Roles('OWNER')
+  @Patch('upgrade-requests/:requestId/payment-review')
+  reviewUpgradePayment(
+    @Param('requestId') requestId: string,
+    @Body() dto: ReviewUpgradePaymentDto,
+  ) {
+    return this.admin.reviewUpgradePayment(requestId, dto);
   }
 }

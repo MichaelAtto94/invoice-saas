@@ -11,6 +11,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { ClientStatementDto } from './dto/client-statement.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 function generatePortalToken() {
   return 'cpt_' + randomBytes(8).toString('hex');
@@ -18,7 +19,10 @@ function generatePortalToken() {
 
 @Injectable()
 export class ClientsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly subscriptions: SubscriptionsService,
+  ) {}
 
   private requireTenantId(): string {
     const tenantId = getRequestContext()?.tenantId;
@@ -27,6 +31,7 @@ export class ClientsService {
   }
 
   async create(dto: CreateClientDto) {
+    await this.subscriptions.assertCanCreateClient();
     const tenantId = this.requireTenantId();
 
     if (!dto.name || dto.name.trim().length === 0) {
